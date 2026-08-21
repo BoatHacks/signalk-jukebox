@@ -84,7 +84,7 @@ Questions).
   protocol for their stereo product line. Not officially published; the
   plugin implements it against the community-documented, reverse-engineered
   protocol (§6.3, §13 — protocol-drift risk noted there). Most
-  Fusion-Link-*aware* chartplotters in practice speak this, not the
+  Fusion-Link-_aware_ chartplotters in practice speak this, not the
   generic NMEA "Entertainment" PGN set. **Best-effort emulation**: the
   plugin broadcasts Fusion PGNs under the SignalK server's own N2K
   identity (§6.3, §12) rather than claiming a distinct bus address of
@@ -101,7 +101,7 @@ Questions).
   than created per zone on demand.
 - **Active source** — which audio feed (the Jukebox/Mopidy stream, or
   that zone's own AirPlay receiver) a given zone's Snapclient group is
-  currently attached to. Distinct from *master* playback state, which
+  currently attached to. Distinct from _master_ playback state, which
   is Mopidy-specific (§4).
 
 ### 1.4 Non-goals (v1)
@@ -217,7 +217,7 @@ the canonical state store (§4, ARCHITECTURE.md §2), and any adapter
 - Iris issuing a Mopidy command, a REST `POST`, or an incoming Fusion-Link
   transport command (play/pause/skip) all update canonical state the same
   way: the adapter that originated the command applies it to Mopidy (the
-  actual audio engine) *and* to canonical state; the other adapters are
+  actual audio engine) _and_ to canonical state; the other adapters are
   notified of the resulting state change and update their own outward
   representation (SK path delta, outgoing PGN broadcast, etc.) — they do
   not re-derive it independently.
@@ -254,7 +254,7 @@ copy.
 - **PlaybackState** — `{ state: 'stopped'|'playing'|'paused', track?: { uri, name, artist?, album?, durationMs?, positionMs? }, volume: number (0-100), muted: boolean }`
   — the actual values live in Mopidy; canonical state is kept in sync via
   Mopidy's event stream, and every write to it is applied to Mopidy first
-  (§3.2). `volume`/`muted` here are the *master* volume (pre-zone), used
+  (§3.2). `volume`/`muted` here are the _master_ volume (pre-zone), used
   for Fusion-Link's own volume model (§6.3); per-zone volume is separate
   (`Zone.volume` below).
 - **Zone** — `{ id, name, connected: boolean, volume: number (0-100), muted: boolean, n2kZone?: number, activeSource: 'jukebox'|'airplay', airplay?: { streamName, connected: boolean } }`
@@ -306,14 +306,14 @@ All routes under `/plugins/signalk-jukebox`, respecting SignalK access
 control (read for GETs, write/admin for mutating routes, per
 signalk-container-helper conventions):
 
-| Method & path | Purpose |
-|---|---|
-| `GET /api/status` | Container/Mopidy status, current playback state |
-| `GET /api/zones` | `[{ id, name, connected, volume, muted }]` |
-| `POST /api/zones/:id/volume` | `{ volume: 0-100 }` |
-| `POST /api/zones/:id/mute` | `{ muted: boolean }` |
+| Method & path                                      | Purpose                                                  |
+| -------------------------------------------------- | -------------------------------------------------------- |
+| `GET /api/status`                                  | Container/Mopidy status, current playback state          |
+| `GET /api/zones`                                   | `[{ id, name, connected, volume, muted }]`               |
+| `POST /api/zones/:id/volume`                       | `{ volume: 0-100 }`                                      |
+| `POST /api/zones/:id/mute`                         | `{ muted: boolean }`                                     |
 | `GET /api/update/check` / `POST /api/update/apply` | Image update routes (`registerUpdateRoutes`, admin-only) |
-| `GET /api/versions` | Image version list for the config panel dropdown |
+| `GET /api/versions`                                | Image version list for the config panel dropdown         |
 
 Actual playback control (play/pause/skip/queue/search) goes through Iris
 directly against Mopidy's own HTTP/JSON-RPC API — this plugin does not
@@ -329,15 +329,15 @@ there to Mopidy/Snapserver) exactly like a REST call or a Fusion-Link
 command would; deltas are published on every canonical-state change
 regardless of which interface caused it:
 
-| Path | Value | Notes |
-|---|---|---|
-| `entertainment.jukebox.playback.state` | `'stopped'\|'playing'\|'paused'` | |
-| `entertainment.jukebox.playback.track` | `{ name, artist?, album? }` | Present only while playing/paused |
-| `entertainment.jukebox.playback.volume` | `number` (0-100), PUT-able | Master volume (§4) |
-| `entertainment.jukebox.zones.<id>.connected` | `boolean` | |
-| `entertainment.jukebox.zones.<id>.volume` | `number` (0-100), PUT-able | |
-| `entertainment.jukebox.zones.<id>.muted` | `boolean`, PUT-able | |
-| `entertainment.jukebox.zones.<id>.n2kZone` | `number` (0-3), read-only | Present only if assigned (§2) |
+| Path                                         | Value                            | Notes                             |
+| -------------------------------------------- | -------------------------------- | --------------------------------- |
+| `entertainment.jukebox.playback.state`       | `'stopped'\|'playing'\|'paused'` |                                   |
+| `entertainment.jukebox.playback.track`       | `{ name, artist?, album? }`      | Present only while playing/paused |
+| `entertainment.jukebox.playback.volume`      | `number` (0-100), PUT-able       | Master volume (§4)                |
+| `entertainment.jukebox.zones.<id>.connected` | `boolean`                        |                                   |
+| `entertainment.jukebox.zones.<id>.volume`    | `number` (0-100), PUT-able       |                                   |
+| `entertainment.jukebox.zones.<id>.muted`     | `boolean`, PUT-able              |                                   |
+| `entertainment.jukebox.zones.<id>.n2kZone`   | `number` (0-3), read-only        | Present only if assigned (§2)     |
 
 These exist so other plugins/instruments can show "now playing" or react
 to it; there is no other consumer identified yet (§13).
@@ -477,20 +477,20 @@ boat-wide toggle and pool size in §9.
 
 ## 9. Configuration
 
-| Setting | Default | Notes |
-|---|---|---|
-| `libraryPath` | — (required for local playback) | Host folder bind-mounted read-only via `resolveMount()` |
-| `backends.local.enabled` | `true` | |
-| `backends.radio.enabled` | `false` | Internet radio extension |
-| `backends.spotify.enabled` | `false` | |
-| `backends.spotify.username` / `.password` (or client credentials, per Mopidy-Spotify's actual auth requirements) | — | Only used/required when `backends.spotify.enabled` |
-| `imageTag` | `auto` | Standard container-helper update-tracking convention |
-| `n2k.enabled` | `false` | Master toggle for the N2K/Fusion-Link interface |
-| `n2k.deviceName` | `"Jukebox"` | Presented as the Fusion device's name on the bus |
-| `n2k.deviceInstance` | `0` | NMEA2000 device instance, in case a boat somehow runs two jukebox-like devices |
-| `airplay.enabled` | `true` | Master toggle for per-zone AirPlay receivers (§6.4) |
-| `airplay.maxZones` | `4` | Size of the pre-provisioned AirPlay stream pool (§6.4); zones beyond this get no AirPlay slot |
-| `airplay.namePattern` | `"{boatName} - {zoneName}"` | mDNS name template for a slot once claimed by a zone; `{boatName}` sourced from SignalK's own vessel name where available |
+| Setting                                                                                                          | Default                         | Notes                                                                                                                     |
+| ---------------------------------------------------------------------------------------------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `libraryPath`                                                                                                    | — (required for local playback) | Host folder bind-mounted read-only via `resolveMount()`                                                                   |
+| `backends.local.enabled`                                                                                         | `true`                          |                                                                                                                           |
+| `backends.radio.enabled`                                                                                         | `false`                         | Internet radio extension                                                                                                  |
+| `backends.spotify.enabled`                                                                                       | `false`                         |                                                                                                                           |
+| `backends.spotify.username` / `.password` (or client credentials, per Mopidy-Spotify's actual auth requirements) | —                               | Only used/required when `backends.spotify.enabled`                                                                        |
+| `imageTag`                                                                                                       | `auto`                          | Standard container-helper update-tracking convention                                                                      |
+| `n2k.enabled`                                                                                                    | `false`                         | Master toggle for the N2K/Fusion-Link interface                                                                           |
+| `n2k.deviceName`                                                                                                 | `"Jukebox"`                     | Presented as the Fusion device's name on the bus                                                                          |
+| `n2k.deviceInstance`                                                                                             | `0`                             | NMEA2000 device instance, in case a boat somehow runs two jukebox-like devices                                            |
+| `airplay.enabled`                                                                                                | `true`                          | Master toggle for per-zone AirPlay receivers (§6.4)                                                                       |
+| `airplay.maxZones`                                                                                               | `4`                             | Size of the pre-provisioned AirPlay stream pool (§6.4); zones beyond this get no AirPlay slot                             |
+| `airplay.namePattern`                                                                                            | `"{boatName} - {zoneName}"`     | mDNS name template for a slot once claimed by a zone; `{boatName}` sourced from SignalK's own vessel name where available |
 
 ## 10. MVP Scope
 
@@ -589,7 +589,7 @@ boat-wide toggle and pool size in §9.
   interface access — a real new hardware/deployment dependency this
   project doesn't currently have and isn't taking on for v1. Chosen
   deliberately over that heavier path to keep the plugin's only
-  dependency "SignalK is already configured with *some* N2K provider,"
+  dependency "SignalK is already configured with _some_ N2K provider,"
   at the accepted cost that whether MFDs still respond usefully to
   broadcasts from a non-self-identified source is genuinely unverified
   (§13) — this is a real risk to the feature working at all, carried
@@ -603,7 +603,7 @@ boat-wide toggle and pool size in §9.
 - **One canonical state store, all interfaces as peers** — considered and
   rejected: keeping Mopidy as the sole source of truth and having N2K/
   Fusion/REST be one-way mirrors of it (the model this doc originally
-  had). That breaks the moment a command needs to *originate* from an MFD
+  had). That breaks the moment a command needs to _originate_ from an MFD
   or a REST call, which the Fusion-Link requirement makes a first-class
   case, not an edge case. A single canonical store that every adapter
   both reads and writes avoids each pair of interfaces needing its own
@@ -661,7 +661,7 @@ boat-wide toggle and pool size in §9.
   boat-wide audio bounce per zone's lifetime, paid once.
 - **Leaving a disconnected zone's AirPlay slot running rather than
   tearing it down** — the alternative (restart to remove it, then
-  restart again if the zone reconnects) would mean *every* zone
+  restart again if the zone reconnects) would mean _every_ zone
   connect/disconnect costs a restart, defeating the entire point of the
   pool/bind-unbind split above. A harmless idle `shairport-sync` instance
   is a better trade than that.
@@ -692,10 +692,10 @@ boat-wide toggle and pool size in §9.
   approach, but with a real open risk left behind.** Confirmed (by
   reading `signalk-fusion-stereo`'s source, plus the
   `RaymarineAPtoFakeNavicoAutoPilot` precedent) that `app.emit(
-  'nmea2000out', ...)` transmits under the SignalK server's own already-
+'nmea2000out', ...)` transmits under the SignalK server's own already-
   claimed address — it does **not** give the plugin a distinct,
   independently-recognized bus identity. `signalk-fusion-stereo` itself
-  never needed one: it's a *controller* of an existing real Fusion unit,
+  never needed one: it's a _controller_ of an existing real Fusion unit,
   not an emulator, so it has zero ISO Address Claim (PGN 60928) /
   Product Information (PGN 126996) code to learn from. Genuine
   emulation needs a standalone, address-claiming canboatjs `candevice`

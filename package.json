@@ -1,0 +1,73 @@
+{
+  "name": "signalk-jukebox",
+  "version": "0.0.1",
+  "description": "Whole-boat music playback for SignalK: containerized Mopidy + Snapcast multi-zone audio, Iris web control, NMEA2000/Fusion-Link interop, and per-zone AirPlay receivers, all sharing one live state.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "npm run typecheck:test && vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "typecheck:test": "tsc --noEmit --project tsconfig.test.json",
+    "prettier": "prettier --write .",
+    "lint": "eslint --fix",
+    "format": "npm run prettier && npm run lint",
+    "ci-lint": "eslint && prettier --check .",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BoatHacks/signalk-jukebox.git"
+  },
+  "bugs": {
+    "url": "https://github.com/BoatHacks/signalk-jukebox/issues"
+  },
+  "homepage": "https://github.com/BoatHacks/signalk-jukebox#readme",
+  "keywords": [
+    "signalk",
+    "signalk-container",
+    "music",
+    "mopidy",
+    "snapcast",
+    "airplay",
+    "fusion-link",
+    "nmea2000"
+  ],
+  "author": "BoatHacks",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "signalk": {
+    "requires": [
+      "signalk-container"
+    ]
+  },
+  "dependencies": {
+    "signalk-container-helper": "^0.7.0"
+  },
+  "peerDependencies": {
+    "react": ">=17"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.20.1",
+    "@types/react": "^19.0.0",
+    "eslint": "^10.2.0",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^17.4.0",
+    "prettier": "^3.8.1",
+    "react": "^19.0.0",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.58.0",
+    "vitest": "^4.1.10"
+  }
+}

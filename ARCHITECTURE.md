@@ -153,7 +153,7 @@ other directly) when a command arrives on its interface.
   broadcasts under the SignalK server's own already-claimed address,
   same as the precedent studied for this decision,
   [signalk-fusion-stereo](https://github.com/sbender9/signalk-fusion-stereo)
-  (itself a *controller* of a real Fusion unit, not an emulator, and
+  (itself a _controller_ of a real Fusion unit, not an emulator, and
   confirmed via source reading to have no address-claiming code either).
   Whether MFDs respond usefully to broadcasts from a non-self-identified
   source is unverified against real hardware — SPEC.md §13 carries this
@@ -207,17 +207,17 @@ the source of truth for field-level detail, SPEC.md §4 is.
 
 ## 4. Technology Stack
 
-| Layer | Choice | Why |
-|---|---|---|
-| Plugin runtime | Node.js / TypeScript | Matches signalk-container-helper's requirement (Node ≥ 22, ESM) and the rest of the SignalK plugin ecosystem |
-| Container helper | `signalk-container-helper` (`ManagedContainer`) | Purpose-built for exactly this lifecycle; avoids re-deriving polling/readiness/update-route code every containerized plugin has hand-rolled |
-| Music server | Mopidy | Extensible backend model (local/radio/Spotify from one server), mature, actively maintained |
-| Web client | Iris | Existing, full-featured Mopidy web client — avoids building a competing player UI (SPEC.md §12) |
-| Multi-zone audio | Snapcast (Snapserver in-container, Snapclients external) | Purpose-built for synced multi-zone playback with independent per-zone volume; existing Snapclient images/hardware boaters can deploy independently |
-| AirPlay receiving | Snapcast's built-in `airplay` stream source type (wraps `shairport-sync` per stream) | Reuses Snapcast's own process/mDNS lifecycle management per stream instead of the plugin hand-rolling multiple `shairport-sync` instances (SPEC.md §12) |
-| Canonical state store | In-process `EventEmitter`-backed object, no external DB | State is small (playback + a handful of zones), lives entirely for the plugin's own runtime, and needs sub-second propagation to adapters — a database would add latency and an operational dependency for no benefit at this scale |
-| NMEA2000 / Fusion-Link | Encode/decode against SignalK's own N2K provider (`app.emit('nmea2000out', ...)` + PGN-in hook); PGN definitions sourced from Canboat where possible | Rides the boat's existing N2K gateway instead of requiring dedicated CAN hardware/access for this plugin (SPEC.md §1.4, §13) |
-| Admin config panel | React via `signalk-container-helper/ui` | Reuses the shared status-card/version-dropdown/update-controls vocabulary rather than hand-copying it (per that library's stated purpose) |
+| Layer                  | Choice                                                                                                                                               | Why                                                                                                                                                                                                                                 |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Plugin runtime         | Node.js / TypeScript                                                                                                                                 | Matches signalk-container-helper's requirement (Node ≥ 22, ESM) and the rest of the SignalK plugin ecosystem                                                                                                                        |
+| Container helper       | `signalk-container-helper` (`ManagedContainer`)                                                                                                      | Purpose-built for exactly this lifecycle; avoids re-deriving polling/readiness/update-route code every containerized plugin has hand-rolled                                                                                         |
+| Music server           | Mopidy                                                                                                                                               | Extensible backend model (local/radio/Spotify from one server), mature, actively maintained                                                                                                                                         |
+| Web client             | Iris                                                                                                                                                 | Existing, full-featured Mopidy web client — avoids building a competing player UI (SPEC.md §12)                                                                                                                                     |
+| Multi-zone audio       | Snapcast (Snapserver in-container, Snapclients external)                                                                                             | Purpose-built for synced multi-zone playback with independent per-zone volume; existing Snapclient images/hardware boaters can deploy independently                                                                                 |
+| AirPlay receiving      | Snapcast's built-in `airplay` stream source type (wraps `shairport-sync` per stream)                                                                 | Reuses Snapcast's own process/mDNS lifecycle management per stream instead of the plugin hand-rolling multiple `shairport-sync` instances (SPEC.md §12)                                                                             |
+| Canonical state store  | In-process `EventEmitter`-backed object, no external DB                                                                                              | State is small (playback + a handful of zones), lives entirely for the plugin's own runtime, and needs sub-second propagation to adapters — a database would add latency and an operational dependency for no benefit at this scale |
+| NMEA2000 / Fusion-Link | Encode/decode against SignalK's own N2K provider (`app.emit('nmea2000out', ...)` + PGN-in hook); PGN definitions sourced from Canboat where possible | Rides the boat's existing N2K gateway instead of requiring dedicated CAN hardware/access for this plugin (SPEC.md §1.4, §13)                                                                                                        |
+| Admin config panel     | React via `signalk-container-helper/ui`                                                                                                              | Reuses the shared status-card/version-dropdown/update-controls vocabulary rather than hand-copying it (per that library's stated purpose)                                                                                           |
 
 ## 5. Integration Points
 
@@ -247,7 +247,7 @@ the source of truth for field-level detail, SPEC.md §4 is.
   JSON-RPC protocol (`doc/json_rpc_api/control.md` in the Snapcast repo,
   now at `snapcast/snapcast` — moved from `badaix/snapcast`).
 - **SignalK's NMEA2000 provider** — outbound via `app.emit('nmea2000out',
-  pgnString)`, inbound via SignalK's PGN-in event hook. The plugin does
+pgnString)`, inbound via SignalK's PGN-in event hook. The plugin does
   not talk to a CAN interface directly; whatever gateway (Actisense,
   Yacht Devices, canable/socketcan) is already configured for the SK
   server carries these messages (SPEC.md §1.4, ARCHITECTURE.md §2.3).
@@ -258,7 +258,7 @@ the source of truth for field-level detail, SPEC.md §4 is.
 - **Fusion-Link protocol** — unofficial/reverse-engineered (SPEC.md §13);
   PGN encode/decode implemented against community documentation, cross-
   referenced with Canboat's PGN database where it overlaps. `@canboat/
-  ts-pgns` (the structured PGN library `signalk-fusion-stereo` uses for
+ts-pgns` (the structured PGN library `signalk-fusion-stereo` uses for
   its Fusion PGN 126720 message construction) is a candidate dependency
   worth evaluating during implementation rather than hand-rolling PGN
   encode/decode from scratch.
@@ -319,7 +319,7 @@ the source of truth for field-level detail, SPEC.md §4 is.
   arbitrary command execution).** This plugin must never work around
   that restriction (e.g. by shelling out to add a raw `process://`
   stream some other way) — the pool-based design (§2.2) exists in part
-  *because* that path is deliberately closed, not merely inconvenient.
+  _because_ that path is deliberately closed, not merely inconvenient.
 
 ## 7. File Structure
 
@@ -392,7 +392,7 @@ signalk-jukebox/
   API is stable enough to build against (SPEC.md §13).
 - **Voice announcement ducking** — if signalk-wyoming's stretch goal
   ("Snapcast as an announce target") is picked up, the natural seam is
-  signalk-wyoming's orchestrator becoming a second Snapserver *source*
+  signalk-wyoming's orchestrator becoming a second Snapserver _source_
   (or ducking this plugin's stream) rather than this plugin knowing
   anything about voice — keeps the two plugins' responsibilities
   separate.
@@ -418,7 +418,7 @@ signalk-jukebox/
 - **Android-equivalent casting** (SPEC.md §1.4, §10.2) — Chromecast,
   Bluetooth A2DP, or DLNA/UPnP would each need their own adapter
   alongside `src/airplay/`; whichever is chosen should reuse the same
-  *pooled-slot-with-persisted-claim* pattern (§2.2, §6.4) rather than
+  _pooled-slot-with-persisted-claim_ pattern (§2.2, §6.4) rather than
   assume dynamic runtime stream creation is available — Snapcast's
   security-motivated RPC restriction (§5) is a Snapcast property, not an
   `airplay`-specific one, and would very likely apply equally to however
