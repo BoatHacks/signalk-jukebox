@@ -75,6 +75,13 @@ export function createManagedContainer({
         pidsLimit: 200,
       },
     }),
-    readiness: { port: MOPIDY_PORT, path: "/mopidy/rpc" },
+    // Confirmed by build-testing (devpod): /mopidy/rpc is POST-only
+    // JSON-RPC and returns 405 to a plain GET, which is what
+    // signalk-container-helper's readiness prober sends -- using it here
+    // meant the container never registered as ready, container.start()
+    // never resolved an address, and the reverse proxy (proxy.ts) stayed
+    // permanently 503. image/webui's own static index (always mounted,
+    // §2.4) answers GET with a real 200 and needs no JSON body.
+    readiness: { port: MOPIDY_PORT, path: "/jukebox/" },
   });
 }
