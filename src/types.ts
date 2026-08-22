@@ -72,11 +72,17 @@ export interface PluginSettings {
   libraryPath?: string;
   backends: {
     local: { enabled: boolean };
+    /** Mopidy-TuneIn (SPEC.md §12) -- no credentials needed. */
     radio: { enabled: boolean };
     spotify: {
+      /** SPEC.md §5, §13: currently degraded upstream (mopidy-spotify#437,
+       * an open login5 auth issue) -- not a solid MVP feature yet. */
       enabled: boolean;
-      username?: string;
-      password?: string;
+      /** Registered app OAuth credentials (SPEC.md §9, §13). NOT
+       * username/password -- Spotify disabled that login path for
+       * third-party clients entirely as of Mopidy-Spotify v5.0.0. */
+      clientId?: string;
+      clientSecret?: string;
     };
   };
   imageTag: string;
@@ -89,6 +95,18 @@ export interface PluginSettings {
     enabled: boolean;
     maxZones: number;
     namePattern: string;
+  };
+  vhf: {
+    enabled: boolean;
+    resumeDelaySeconds: number;
+  };
+  voiceDucking: {
+    enabled: boolean;
+    duckVolumePercent: number;
+    resumeDelaySeconds: number;
+    /** voice.satellites.<id> -> jukebox zone id (SPEC.md §6.5, §9).
+     * Unmapped satellites duck all zones (safe fallback). */
+    satelliteZoneMap: Record<string, string>;
   };
 }
 
@@ -108,5 +126,15 @@ export const SCHEMA_DEFAULTS: PluginSettings = {
     enabled: true,
     maxZones: 4,
     namePattern: "{boatName} - {zoneName}",
+  },
+  vhf: {
+    enabled: true,
+    resumeDelaySeconds: 5,
+  },
+  voiceDucking: {
+    enabled: true,
+    duckVolumePercent: 20,
+    resumeDelaySeconds: 1,
+    satelliteZoneMap: {},
   },
 };

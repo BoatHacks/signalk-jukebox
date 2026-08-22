@@ -191,17 +191,23 @@ Questions).
   (squelch opening) — there is no path for your own outgoing
   transmission (PTT) in either source plugin, so this only ducks for
   calls you're receiving, not ones you're making.
-- **Voice-assistant activity ducks (lowers, doesn't pause) playback.**
-  Watching signalk-wyoming's own `voice.satellites.<id>.state` paths (if
-  installed — another optional, not-required integration), the plugin
-  lowers zone volume while any satellite is non-`idle` and restores it
-  once all are `idle` again, following the precedent of
+- **Voice-assistant activity ducks (lowers, doesn't pause) playback, with
+  an opt-in per-zone target.** Watching signalk-wyoming's own
+  `voice.satellites.<id>.state` paths (if installed — another optional,
+  not-required integration), the plugin lowers volume while any
+  satellite is non-`idle` and restores it once that satellite returns to
+  `idle`, following the precedent of
   [FutureProofHomes' wyoming-enhancements](https://github.com/FutureProofHomes/wyoming-enhancements)
   project (§12) — a volume dip under continuing audio, not a stop, since
   voice interactions are typically short and the point is intelligibility
-  during them, not a hard interruption. MVP ducks **all zones**, not just
-  the zone physically near the speaking satellite — see §13 for why a
-  proper per-zone mapping isn't in MVP.
+  during them, not a hard interruption. **Target zones per satellite**
+  (§9's `voiceDucking.satelliteZoneMap`): if the active satellite has a
+  configured mapping entry, only its mapped zone is ducked; if it has no
+  entry, **all zones** are ducked (the safe default, unmapped) for as
+  long as that satellite is active. Multiple simultaneously-active
+  satellites union their target zone sets. Configuring the mapping is
+  optional and manual (§13) — there's no auto-detection of which
+  Snapclient physically sits with which satellite.
 - **Every zone gets its own AirPlay receiver, drawn from a fixed pool of
   pre-provisioned slots (§6.4).** Snapcast's control API cannot create
   `airplay`-type streams at runtime (deliberately blocked as a security
@@ -308,10 +314,13 @@ copy.
   (§2), independent of whether that Snapclient is currently connected.
   Both numbers are assigned once, the first time a Snapclient is seen,
   and never reassigned automatically thereafter.
-- **DuckState** (plugin-internal, not persisted — §8) — `{ pausedByVhf: boolean, duckedByVoice: boolean, preDuckZoneVolumes: Record<zoneId, number> }`.
+- **DuckState** (plugin-internal, not persisted — §8) — `{ pausedByVhf: boolean, activeDucksBySatellite: Record<satelliteId, zoneId[]>, preDuckZoneVolumes: Record<zoneId, number> }`.
   `pausedByVhf` is what makes the VHF auto-resume rule (§2) not fight a
-  manual pause; `preDuckZoneVolumes` is what voice ducking restores to,
-  captured at the moment ducking starts (§2, §12 — the accepted
+  manual pause; `activeDucksBySatellite` tracks which satellite(s) are
+  currently ducking which zones, so a zone targeted by two overlapping
+  satellite sessions stays ducked until both finish (§6.5);
+  `preDuckZoneVolumes` is what voice ducking restores to, captured at the
+  moment each zone starts being ducked (§2, §12 — the accepted
   simplification if a user changes a zone's volume _during_ a duck).
 - **PluginSettings** — backend toggles, library path, Spotify credentials
   (if enabled), image tag, N2K/Fusion enable + device identity settings,
@@ -327,9 +336,16 @@ copy.
   Mopidy-TuneIn or a curated station list); requires internet
   connectivity to resolve streams, gracefully unavailable when offline
   (boats lose connectivity — this must not be treated as an error state).
-- **Spotify** — Mopidy-Spotify, requires a Spotify Premium account and
-  credentials entered in the Admin panel (§9). Unavailable offline, same
-  as internet radio.
+- **Spotify** — Mopidy-Spotify, requires a Spotify Premium account, a
+  registered app's `client_id`/`client_secret` (not username/password —
+  Spotify disabled that login path entirely; corrected via research,
+  §13), entered in the Admin panel (§9). Unavailable offline, same as
+  internet radio. **Currently degraded upstream, not just
+  offline-unavailable** — as of this research (2026-08-22), Mopidy-Spotify
+  has an open, unresolved upstream issue (mopidy-spotify#437) where
+  Spotify's own login5 authentication rejects even valid credentials for
+  third-party streaming clients; treat this backend as unreliable until
+  that's resolved, not as a solid MVP feature (§13).
 - **Zone list** — read from Snapserver's own control API (JSON-RPC), not
   configured by the user.
 - **Duck triggers** (§6.5) — `communication.vhf.busy` and
@@ -429,11 +445,25 @@ the plugin does not open its own CAN connection (ARCHITECTURE.md §5).
 `activeSource` is `airplay`, its broadcast volume/mute still reflects
 that zone's real Snapclient volume (the AirPlay session's audio is still
 routed through the same Snapclient, just from a different stream) — an
-MFD's per-zone volume control keeps working regardless of source. Track/
-now-playing metadata, however, is Mopidy-specific and has no AirPlay
-equivalent to show in MVP; §13 notes this as an open gap, not a design
-decision, since it means "what's actually playing in the cockpit" can go
-stale on the MFD while someone's AirPlaying there.
+MFD's per-zone volume control keeps working regardless of source, using
+Fusion-Link's genuinely per-zone volume fields (`fusionSetZoneVolume` /
+`fusionVolumes`' `zone1`–`zone4`, confirmed via `@canboat/ts-pgns`, §13
+— this is also the protocol-level confirmation that Fusion-Link caps at
+exactly 4 zones, validating the `n2kZone` 0–3 range used throughout this
+doc). Track/now-playing metadata is Mopidy-specific and has no AirPlay
+equivalent to show — rather than broadcast stale or wrong Mopidy track
+data while a zone is actually playing someone's AirPlay session, **if
+any N2K-zoned zone's `activeSource` is `airplay`, the broadcast
+now-playing field is replaced with a fixed placeholder ("AirPlay
+Active") instead of real track info** (§12). This doesn't say _which_
+zone — **confirmed via research, not assumed (§13): Fusion-Link's
+now-playing/source fields (`fusionSetSource`, `fusionTrackName`,
+`fusionArtistName`, `fusionAlbumName`) are all keyed by `sourceId`, never
+by zone — there is no `fusionSetZoneSource` or per-zone track message
+anywhere in the protocol, matching real Fusion hardware's own
+architecture (one source distributed to zones with independent
+volume/EQ, not independent per-zone source selection)** — but the
+placeholder still avoids showing information that's flatly false.
 
 **Bus-identity caveat (confirmed via research, §13):** the plugin
 broadcasts Fusion PGNs under the SignalK server's own already-claimed
@@ -508,16 +538,25 @@ this plugin's behavior to another plugin's API surface/version (§12).
   clear the flag without altering the manual command's effect — the user
   just took over.
 
-**Voice (`voice.satellites.<id>.state` → all-zone volume duck, §2):**
+**Voice (`voice.satellites.<id>.state` → per-satellite-mapped, or
+all-zone fallback, volume duck, §2):**
 
-- On any satellite transitioning to a non-`idle` state while
-  `duckedByVoice` is `false`: capture every zone's current volume into
-  `preDuckZoneVolumes`, set `duckedByVoice = true`, and lower every
-  zone's Snapcast client volume to `voiceDucking.duckVolumePercent` (§9)
-  via `Client.SetVolume` (confirmed dynamic, no restart — SPEC.md §13).
-- On every satellite returning to `idle`: after
-  `voiceDucking.resumeDelaySeconds` (§9), restore each zone's volume from
-  `preDuckZoneVolumes` and clear `duckedByVoice`.
+- A satellite's **target zones** = `voiceDucking.satelliteZoneMap[satelliteId]`
+  if present, else every known zone (the unmapped fallback).
+- On a satellite transitioning to a non-`idle` state: for each of its
+  target zones not already ducked by some other active satellite,
+  capture its current volume into `preDuckZoneVolumes` and lower it to
+  `voiceDucking.duckVolumePercent` (§9) via `Client.SetVolume`
+  (confirmed dynamic, no restart — SPEC.md §13). Records that satellite
+  as currently ducking its target zones (`DuckState.activeDucksBySatellite`,
+  §4).
+- On a satellite returning to `idle`: after
+  `voiceDucking.resumeDelaySeconds` (§9), drop it from
+  `activeDucksBySatellite`; for each of its former target zones no
+  longer targeted by any _other_ still-active satellite, restore the
+  zone's volume from `preDuckZoneVolumes` and clear that entry. A zone
+  targeted by two simultaneously-speaking satellites therefore stays
+  ducked until both finish, not just the first to end.
 - A zone the user manually changed the volume of _during_ a duck has
   that change overwritten on restore — an accepted simplification (§12),
   not solved.
@@ -537,9 +576,14 @@ this plugin's behavior to another plugin's API surface/version (§12).
 
 ## 8. Persistence
 
-- **Mopidy config, library scan cache, backend state** (Spotify auth
-  cache, etc.) — persisted via `signalkDataMount` (the container's data
-  volume), survives container recreation.
+- **Mopidy config, library scan cache, backend state** — persisted via
+  `signalkDataMount` (the container's data volume), survives container
+  recreation. For Spotify specifically (§5, §13): Mopidy-Spotify's
+  librespot credentials cache (`credentials.json`), which the current
+  upstream workaround for its login5 issue depends on, must live in this
+  same mount — losing it on container recreation would mean re-running
+  whatever manual credential-generation workaround Spotify's current
+  breakage requires, every time.
 - **Queue/playback position** — plugin-managed: the plugin polls Mopidy's
   JSON-RPC API periodically (and on clean `stop()`) and snapshots the
   current tracklist + track index + position into the same data volume;
@@ -555,25 +599,26 @@ this plugin's behavior to another plugin's API surface/version (§12).
 
 ## 9. Configuration
 
-| Setting                                                                                                          | Default                         | Notes                                                                                                                     |
-| ---------------------------------------------------------------------------------------------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `libraryPath`                                                                                                    | — (required for local playback) | Host folder bind-mounted read-only via `resolveMount()`                                                                   |
-| `backends.local.enabled`                                                                                         | `true`                          |                                                                                                                           |
-| `backends.radio.enabled`                                                                                         | `false`                         | Internet radio extension                                                                                                  |
-| `backends.spotify.enabled`                                                                                       | `false`                         |                                                                                                                           |
-| `backends.spotify.username` / `.password` (or client credentials, per Mopidy-Spotify's actual auth requirements) | —                               | Only used/required when `backends.spotify.enabled`                                                                        |
-| `imageTag`                                                                                                       | `auto`                          | Standard container-helper update-tracking convention                                                                      |
-| `n2k.enabled`                                                                                                    | `false`                         | Master toggle for the N2K/Fusion-Link interface                                                                           |
-| `n2k.deviceName`                                                                                                 | `"Jukebox"`                     | Presented as the Fusion device's name on the bus                                                                          |
-| `n2k.deviceInstance`                                                                                             | `0`                             | NMEA2000 device instance, in case a boat somehow runs two jukebox-like devices                                            |
-| `airplay.enabled`                                                                                                | `true`                          | Master toggle for per-zone AirPlay receivers (§6.4)                                                                       |
-| `airplay.maxZones`                                                                                               | `4`                             | Size of the pre-provisioned AirPlay stream pool (§6.4); zones beyond this get no AirPlay slot                             |
-| `airplay.namePattern`                                                                                            | `"{boatName} - {zoneName}"`     | mDNS name template for a slot once claimed by a zone; `{boatName}` sourced from SignalK's own vessel name where available |
-| `vhf.enabled`                                                                                                    | `true`                          | Master toggle for the VHF pause trigger (§6.5); harmless if no VHF plugin is installed — the path just never fires        |
-| `vhf.resumeDelaySeconds`                                                                                         | `5`                             | Delay after `communication.vhf.busy` clears before auto-resuming                                                          |
-| `voiceDucking.enabled`                                                                                           | `true`                          | Master toggle for the voice-activity duck trigger (§6.5)                                                                  |
-| `voiceDucking.duckVolumePercent`                                                                                 | `20`                            | Zone volume (0-100) while any voice satellite is active                                                                   |
-| `voiceDucking.resumeDelaySeconds`                                                                                | `1`                             | Delay after all satellites return to `idle` before restoring volume                                                       |
+| Setting                                       | Default                         | Notes                                                                                                                                                                                    |
+| --------------------------------------------- | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `libraryPath`                                 | — (required for local playback) | Host folder bind-mounted read-only via `resolveMount()`                                                                                                                                  |
+| `backends.local.enabled`                      | `true`                          |                                                                                                                                                                                          |
+| `backends.radio.enabled`                      | `false`                         | Internet radio via Mopidy-TuneIn (§12); requires internet connectivity, no credentials needed                                                                                            |
+| `backends.spotify.enabled`                    | `false`                         | See the reliability caveat in §5 before enabling — currently degraded upstream                                                                                                           |
+| `backends.spotify.clientId` / `.clientSecret` | —                               | Corrected via research (§13) — Mopidy-Spotify v5.0.0+ requires a registered app's OAuth client credentials, not username/password, which Spotify disabled for third-party login entirely |
+| `imageTag`                                    | `auto`                          | Standard container-helper update-tracking convention                                                                                                                                     |
+| `n2k.enabled`                                 | `false`                         | Master toggle for the N2K/Fusion-Link interface                                                                                                                                          |
+| `n2k.deviceName`                              | `"Jukebox"`                     | Presented as the Fusion device's name on the bus                                                                                                                                         |
+| `n2k.deviceInstance`                          | `0`                             | NMEA2000 device instance, in case a boat somehow runs two jukebox-like devices                                                                                                           |
+| `airplay.enabled`                             | `true`                          | Master toggle for per-zone AirPlay receivers (§6.4)                                                                                                                                      |
+| `airplay.maxZones`                            | `4`                             | Size of the pre-provisioned AirPlay stream pool (§6.4); zones beyond this get no AirPlay slot                                                                                            |
+| `airplay.namePattern`                         | `"{boatName} - {zoneName}"`     | mDNS name template for a slot once claimed by a zone; `{boatName}` sourced from SignalK's own vessel name where available                                                                |
+| `vhf.enabled`                                 | `true`                          | Master toggle for the VHF pause trigger (§6.5); harmless if no VHF plugin is installed — the path just never fires                                                                       |
+| `vhf.resumeDelaySeconds`                      | `5`                             | Delay after `communication.vhf.busy` clears before auto-resuming                                                                                                                         |
+| `voiceDucking.enabled`                        | `true`                          | Master toggle for the voice-activity duck trigger (§6.5)                                                                                                                                 |
+| `voiceDucking.duckVolumePercent`              | `20`                            | Zone volume (0-100) while any voice satellite is active                                                                                                                                  |
+| `voiceDucking.resumeDelaySeconds`             | `1`                             | Delay after a satellite returns to `idle` before restoring its target zones' volume                                                                                                      |
+| `voiceDucking.satelliteZoneMap`               | `{}`                            | Optional `voice.satellites.<id>` → jukebox zone id map (§2, §6.5); satellites with no entry duck all zones (safe fallback)                                                               |
 
 ## 10. MVP Scope
 
@@ -634,6 +679,12 @@ this plugin's behavior to another plugin's API surface/version (§12).
 - [signalk-wyoming](https://github.com/hoeken/signalk-wyoming) — sibling voice-assistant plugin family; its SPEC.md documents the non-goal/stretch-goal boundary referenced in §1.2.
 - [Mopidy](https://mopidy.com/) / [Mopidy-Spotify](https://github.com/mopidy/mopidy-spotify) / [Iris](https://github.com/jaedb/Iris)
 - [Snapcast](https://github.com/badaix/snapcast)
+- [@canboat/ts-pgns](https://github.com/canboat/ts-pgns) — structured PGN
+  definitions (v1.11.18 checked) confirming Fusion-Link's actual
+  zone/source field layout (§6.3, §12, §13): per-zone volume
+  (`fusionSetZoneVolume`, `fusionVolumes`), device-wide source/now-playing
+  (`fusionSetSource`, `fusionTrackName`/`fusionArtistName`/
+  `fusionAlbumName`, all keyed by `sourceId` not zone).
 - [FutureProofHomes/wyoming-enhancements](https://github.com/FutureProofHomes/wyoming-enhancements) —
   the researched precedent for voice-activity ducking (§6.5, §12): a
   wake-word `--detection-command`/`--tts-stop-command` pair that dips and
@@ -699,6 +750,11 @@ this plugin's behavior to another plugin's API surface/version (§12).
   disk); no separate credential vault. This matches how the rest of the
   SignalK plugin ecosystem handles service credentials, and avoids
   building bespoke secret storage for one backend.
+- **Mopidy-TuneIn for internet radio** — no credentials needed, largest
+  available station catalog, browsable in Iris out of the box. Chosen
+  over a self-maintained curated station list, which would need someone
+  to pick and maintain stream URLs for no real benefit over an existing,
+  actively-used directory service.
 - **One canonical state store, all interfaces as peers** — considered and
   rejected: keeping Mopidy as the sole source of truth and having N2K/
   Fusion/REST be one-way mirrors of it (the model this doc originally
@@ -733,8 +789,14 @@ this plugin's behavior to another plugin's API surface/version (§12).
   it's a genuinely distinct input the same way Aux is, but it's scoped to
   one zone at a time rather than the boat-wide "current source" concept
   Fusion's own source model assumes, so it doesn't map onto Fusion's
-  source-select cleanly either (§13 flags the resulting gap rather than
-  forcing a fit).
+  source-select cleanly either. **Confirmed via research, not just
+  inferred (§13):** Fusion-Link's protocol has no per-zone source concept
+  at all — `fusionSetSource`/`fusionTrackName`/etc. are keyed by
+  `sourceId` device-wide, never by zone, matching how real Fusion
+  multi-zone hardware actually works (one source distributed to zones
+  with independent volume, not independent per-zone source selection).
+  So this isn't a gap this plugin could close with more engineering — the
+  bus protocol genuinely has nothing to map a per-zone source onto.
 - **Snapcast's native `airplay` stream type over hand-rolled
   shairport-sync process management** — Snapcast already spawns and
   manages one `shairport-sync` per configured stream, including its mDNS
@@ -779,21 +841,34 @@ this plugin's behavior to another plugin's API surface/version (§12).
   the mechanism this doc originally reached for) was possible once
   research confirmed it's fully dynamic — unlike stream creation, no
   restart involved (SPEC.md §13, ARCHITECTURE.md §5).
-- **Voice ducking defaults to all zones, not per-zone** — a proper
-  per-zone duck would need to know which Snapclient physically
-  corresponds to which `voice.satellites.<id>`, and neither plugin's
-  naming guarantees that correlation (a satellite id like `"cockpit"`
-  doesn't mechanically imply a Snapclient named the same thing exists,
-  or is the right one). Rather than build a fragile heuristic or force
-  the user to hand-configure a mapping for MVP, ducking everything is the
-  safe default — worth revisiting (§13) once real usage shows whether
-  the correlation problem is worth solving.
+- **Per-zone voice ducking via a manually-configured, opt-in
+  `satelliteZoneMap`, with unmapped satellites falling back to all-zone
+  ducking** — no automatic correlation exists between a
+  `voice.satellites.<id>` and a jukebox zone id (a satellite named
+  `"cockpit"` doesn't mechanically imply a same-named or otherwise
+  identifiable Snapclient is the right one), so guessing at one would be
+  fragile. A manual map is honest about that limit while still letting
+  an operator who cares get precise per-zone behavior; the all-zone
+  fallback for anything unmapped means the feature works safely with
+  zero configuration, same as before this was sketched — nobody is
+  worse off for the option existing.
 - **VHF auto-resume tracks `pausedByVhf` rather than unconditionally
   calling `play()` after the delay** — without it, a user who manually
   paused music five minutes before a radio call would have their pause
   silently overridden the moment the call ended, which is a much worse
   surprise than the feature's entire point (not interrupting the user
   unexpectedly).
+- **A fixed "AirPlay Active" placeholder over surfacing per-zone AirPlay
+  state to Fusion-Link properly** — not a workaround pending a better
+  idea, but the only option: Fusion's now-playing concept is confirmed
+  (not assumed, §13) to be one value for the whole device, so there is no
+  protocol-level way to say "zone 2 is on AirPlay, zone 1 isn't," full
+  stop, on any implementation. A placeholder is strictly better than
+  leaving stale/wrong Mopidy track data displayed, at near-zero
+  implementation cost, so it's in MVP rather
+  than deferred — unlike the harder, genuinely-unresolved problems (a
+  per-zone Fusion source model doesn't exist to build against) that stay
+  open.
 - **Leaving a disconnected zone's AirPlay slot running rather than
   tearing it down** — the alternative (restart to remove it, then
   restart again if the zone reconnects) would mean _every_ zone
@@ -829,13 +904,13 @@ this plugin's behavior to another plugin's API surface/version (§12).
   plugins (or a different radio integration entirely) — not something
   fixable from this side. Documented as a real, permanent limitation of
   this integration, not a TODO.
-- **Per-zone voice ducking, if the satellite↔zone correlation problem
-  gets solved.** MVP ducks all zones (§12); a real per-zone
-  implementation would need either a user-configured
-  `voice.satellites.<id>` → jukebox-zone-id mapping, or some
-  auto-detection heuristic (e.g. matching on name) that doesn't yet
-  exist and would need designing jointly with signalk-wyoming to be
-  reliable, not guessed at unilaterally here.
+- **Auto-detecting the satellite↔zone correlation, rather than requiring
+  manual config.** §6.5/§9's `satelliteZoneMap` is user-configured by
+  design (§12) — there's no reliable way to infer it (a satellite id
+  like `"cockpit"` doesn't mechanically imply a same-named Snapclient is
+  the right one, or exists at all). An auto-detection heuristic would
+  need designing jointly with signalk-wyoming, not guessed at
+  unilaterally here; not attempted for MVP.
 - **Restoring a zone's volume after a voice duck when the user changed
   it mid-duck.** Current design overwrites whatever the user set during
   the duck with the pre-duck value (§6.5, §12) — same category of
@@ -843,9 +918,25 @@ this plugin's behavior to another plugin's API surface/version (§12).
   behavior. Worth watching for real complaints before adding the
   complexity of tracking "did the user touch this since ducking
   started."
-- **Internet radio extension choice.** Mopidy-TuneIn vs. a
-  self-maintained curated station list vs. another extension — not yet
-  decided; affects §9's `backends.radio.*` schema shape.
+- **Mopidy-Spotify credential shape — researched and corrected, plus a
+  real reliability finding.** Confirmed (2026-08-22): `username`/
+  `password` config is deprecated as of Mopidy-Spotify v5.0.0 (Spotify
+  disabled that login path for third-party clients entirely); the
+  correct fields are `client_id`/`client_secret` from a registered app,
+  which §9's schema now reflects. Separately, and more materially:
+  Mopidy-Spotify currently has an **open, unresolved upstream issue**
+  (mopidy-spotify#437, filed 2026-08-11) where Spotify's login5
+  authentication rejects valid third-party credentials outright —
+  basic playback, not just extras like recommendations. The extension
+  itself is actively maintained (commits as recent as this research
+  date), so this reads as "temporarily broken by a Spotify-side change,
+  maintainers are actively working it," not "abandoned project" — but
+  it means the Spotify backend should ship documented as **currently
+  unreliable**, not as a solid MVP feature, until upstream resolves it.
+  If it isn't resolved by implementation time, standalone `librespot` /
+  `go-librespot` (bridged in some form) is the fallback path community
+  members in that issue thread report as still working via a Spotify
+  Connect handoff — not designed here, just noted as the escape hatch.
 - **NMEA2000 address claiming — researched, resolved against a lighter
   approach, but with a real open risk left behind.** Confirmed (by
   reading `signalk-fusion-stereo`'s source, plus the
@@ -901,9 +992,3 @@ this plugin's behavior to another plugin's API surface/version (§12).
   check (`server/streamreader/stream_manager.cpp` in the actual
   Snapcast version this project pins) before relying on the restriction
   being unchanged.
-- **AirPlay + Fusion-Link source-model gap** (§12) — whether a zone's
-  `activeSource: 'airplay'` should be surfaced to N2K/Fusion at all, and
-  how, is unresolved; MVP's answer is "not surfaced" (§6.3) but that
-  means an MFD user sees stale/wrong now-playing info during someone
-  else's AirPlay session, which may prove annoying enough in practice to
-  need revisiting.

@@ -48,8 +48,11 @@ export function createManagedContainer({
         JUKEBOX_LOCAL_ENABLED: String(settings.backends.local.enabled),
         JUKEBOX_RADIO_ENABLED: String(settings.backends.radio.enabled),
         JUKEBOX_SPOTIFY_ENABLED: String(settings.backends.spotify.enabled),
-        JUKEBOX_SPOTIFY_USERNAME: settings.backends.spotify.username ?? "",
-        JUKEBOX_SPOTIFY_PASSWORD: settings.backends.spotify.password ?? "",
+        // clientId/clientSecret, not username/password -- Spotify disabled
+        // third-party username/password login entirely; SPEC.md §5, §13.
+        JUKEBOX_SPOTIFY_CLIENT_ID: settings.backends.spotify.clientId ?? "",
+        JUKEBOX_SPOTIFY_CLIENT_SECRET:
+          settings.backends.spotify.clientSecret ?? "",
         JUKEBOX_AIRPLAY_MAX_ZONES: String(settings.airplay.maxZones),
       },
       volumes: libraryMount ? { "/music": libraryMount.source } : undefined,

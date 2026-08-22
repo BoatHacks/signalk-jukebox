@@ -204,10 +204,14 @@ other directly) when a command arrives on its interface.
 - On VHF busy/clear, calls `MopidyClient.pause()`/`play()` directly
   (SPEC.md §6.5) and tracks `DuckState.pausedByVhf` so the auto-resume
   never overrides a manual pause.
-- On voice satellite state transitions, calls
-  `SnapserverClient.setClientVolume()` per zone (SPEC.md §6.5) — this
-  is the same fully-dynamic RPC call the REST volume route uses
-  (ARCHITECTURE.md §5), not a new capability.
+- On voice satellite state transitions, resolves that satellite's target
+  zones via `voiceDucking.satelliteZoneMap` (mapped zone, or every known
+  zone if unmapped — SPEC.md §6.5, §9) and calls
+  `SnapserverClient.setClientVolume()` per target zone — this is the
+  same fully-dynamic RPC call the REST volume route uses
+  (ARCHITECTURE.md §5), not a new capability. Tracks
+  `DuckState.activeDucksBySatellite` so a zone targeted by two
+  overlapping satellite sessions isn't restored until both end.
 - `DuckState` (SPEC.md §4) is held in-memory only, not part of the
   canonical `CanonicalState`/`StateStore` (§2.1) and not persisted (§8)
   — it's internal bookkeeping for this adapter's own restore logic, not
@@ -468,9 +472,15 @@ signalk-jukebox/
   become a per-zone or boat-wide config toggle if unauthenticated
   receivers prove to be a real problem in practice rather than a
   theoretical one.
-- **Per-zone voice ducking** (SPEC.md §13) — needs a
-  `voice.satellites.<id>` -> jukebox-zone-id correlation that doesn't
-  exist yet; MVP ducks all zones as the safe default.
+- **Auto-detecting the `satelliteZoneMap` correlation** (SPEC.md §13) —
+  MVP's mapping is manual/opt-in; an auto-detection heuristic would need
+  designing jointly with signalk-wyoming, not attempted unilaterally.
+- **A standalone librespot/go-librespot fallback for Spotify** (SPEC.md
+  §12, §13) — if Mopidy-Spotify's current upstream login5 breakage
+  (mopidy-spotify#437) isn't resolved by implementation time, community
+  reports in that issue thread suggest a Spotify-Connect-handoff-based
+  librespot setup still works; not designed here, just the noted escape
+  hatch if the backend as speced turns out unshippable.
 - **Outgoing VHF (PTT) ducking** (SPEC.md §13) — not possible today; the
   `htool` ICOM plugins don't publish anything for it. Would need a
   feature request against those plugins (or a different radio

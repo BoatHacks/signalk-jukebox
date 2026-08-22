@@ -142,10 +142,14 @@ export default function plugin(app: App) {
                 enabled: {
                   type: "boolean",
                   default: false,
-                  title: "Enable Spotify",
+                  title:
+                    "Enable Spotify (currently degraded upstream -- see SPEC.md §5, §13)",
                 },
-                username: { type: "string", title: "Spotify username" },
-                password: { type: "string", title: "Spotify password" },
+                clientId: { type: "string", title: "Spotify client ID" },
+                clientSecret: {
+                  type: "string",
+                  title: "Spotify client secret",
+                },
               },
             },
           },
@@ -177,6 +181,34 @@ export default function plugin(app: App) {
               title: "Max AirPlay zones",
             },
             namePattern: { type: "string", default: "{boatName} - {zoneName}" },
+          },
+        },
+        vhf: {
+          type: "object",
+          properties: {
+            enabled: {
+              type: "boolean",
+              default: true,
+              title: "Pause playback on VHF radio traffic",
+            },
+            resumeDelaySeconds: { type: "number", default: 5 },
+          },
+        },
+        voiceDucking: {
+          type: "object",
+          properties: {
+            enabled: {
+              type: "boolean",
+              default: true,
+              title: "Duck volume during voice-assistant activity",
+            },
+            duckVolumePercent: { type: "number", default: 20 },
+            resumeDelaySeconds: { type: "number", default: 1 },
+            satelliteZoneMap: {
+              type: "object",
+              title: "voice.satellites.<id> -> zone id (optional)",
+              additionalProperties: { type: "string" },
+            },
           },
         },
       },
