@@ -116,8 +116,15 @@ export interface PluginSettings {
     duckVolumePercent: number;
     resumeDelaySeconds: number;
     /** voice.satellites.<id> -> jukebox zone id (SPEC.md §6.5, §9).
-     * Unmapped satellites duck all zones (safe fallback). */
-    satelliteZoneMap: Record<string, string>;
+     * Unmapped satellites duck all zones (safe fallback). An array of
+     * pairs, not a Record<string, string> map: confirmed by build-testing
+     * against the real Admin UI (RJSF v5) that its `additionalProperties`
+     * free-form map rendering doesn't render anything at all here (no add
+     * button, no rows -- just the title, unusably) even though other
+     * plain-object schema fields on the same page render fine. An array
+     * of `{ satelliteId, zoneId }` objects uses RJSF's array-of-objects
+     * field instead, which does render an editable, add/removable list. */
+    satelliteZoneMap: Array<{ satelliteId: string; zoneId: string }>;
   };
 }
 
@@ -149,10 +156,12 @@ export function mergeSettings(
     voiceDucking: {
       ...SCHEMA_DEFAULTS.voiceDucking,
       ...rawConfig.voiceDucking,
-      satelliteZoneMap: {
-        ...SCHEMA_DEFAULTS.voiceDucking.satelliteZoneMap,
-        ...rawConfig.voiceDucking?.satelliteZoneMap,
-      },
+      // An array, unlike the nested objects above -- replaced wholesale
+      // rather than merged entry-by-entry, matching how the admin UI's
+      // array field always submits the complete list on save.
+      satelliteZoneMap:
+        rawConfig.voiceDucking?.satelliteZoneMap ??
+        SCHEMA_DEFAULTS.voiceDucking.satelliteZoneMap,
     },
   };
 }
@@ -181,6 +190,6 @@ export const SCHEMA_DEFAULTS: PluginSettings = {
     enabled: true,
     duckVolumePercent: 20,
     resumeDelaySeconds: 1,
-    satelliteZoneMap: {},
+    satelliteZoneMap: [],
   },
 };

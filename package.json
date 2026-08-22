@@ -27,6 +27,7 @@
   "homepage": "https://github.com/BoatHacks/signalk-jukebox#readme",
   "keywords": [
     "signalk-node-server-plugin",
+    "signalk-webapp",
     "signalk",
     "signalk-container",
     "music",

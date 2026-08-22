@@ -209,9 +209,19 @@ export default function plugin(app: App) {
             duckVolumePercent: { type: "number", default: 20 },
             resumeDelaySeconds: { type: "number", default: 1 },
             satelliteZoneMap: {
-              type: "object",
-              title: "voice.satellites.<id> -> zone id (optional)",
-              additionalProperties: { type: "string" },
+              type: "array",
+              title:
+                "Per-satellite zone mapping (optional -- unmapped satellites duck all zones)",
+              items: {
+                type: "object",
+                properties: {
+                  satelliteId: {
+                    type: "string",
+                    title: "voice.satellites.<id>",
+                  },
+                  zoneId: { type: "string", title: "Jukebox zone id" },
+                },
+              },
             },
           },
         },

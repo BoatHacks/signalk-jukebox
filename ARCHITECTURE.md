@@ -447,6 +447,7 @@ signalk-jukebox/
 │   │   └── store.ts           # canonical state store (§2.1) — the shared source of truth
 │   ├── mopidy-client.ts       # JSON-RPC client: playback state, tracklist snapshot/restore
 │   ├── snapserver-client.ts   # JSON-RPC client: zone list, volume/mute
+│   ├── proxy.ts                # reverse-proxies the plugin's router path to the running container (§2.2)
 │   ├── n2k/
 │   │   ├── fusion.ts          # Fusion-Link encode/decode + address claiming
 │   │   ├── entertainment-pgn.ts # standard NMEA2000 Entertainment PGN encode/decode
@@ -468,6 +469,8 @@ signalk-jukebox/
 │   ├── snapserver.conf.template
 │   ├── entrypoint.sh
 │   └── webui/                 # minimal built-in Mopidy web UI, substituting for Iris (§2.2, §2.4)
+├── public/                    # signalk-webapp keyword's static mount: a redirect shim to the
+│   └── index.html             # proxied web UI, so the plugin is discoverable in the webapps list/App Dock
 ├── test/
 └── webpack.config.cjs         # config-panel remote build (ESM, per container-helper's UI notes)
 ```

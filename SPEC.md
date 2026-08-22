@@ -565,8 +565,9 @@ this plugin's behavior to another plugin's API surface/version (§12).
 **Voice (`voice.satellites.<id>.state` → per-satellite-mapped, or
 all-zone fallback, volume duck, §2):**
 
-- A satellite's **target zones** = `voiceDucking.satelliteZoneMap[satelliteId]`
-  if present, else every known zone (the unmapped fallback).
+- A satellite's **target zones** = the `zoneId` from the
+  `voiceDucking.satelliteZoneMap` entry matching its `satelliteId`, if
+  present, else every known zone (the unmapped fallback).
 - On a satellite transitioning to a non-`idle` state: for each of its
   target zones not already ducked by some other active satellite,
   capture its current volume into `preDuckZoneVolumes` and lower it to
@@ -646,7 +647,7 @@ all-zone fallback, volume duck, §2):**
 | `voiceDucking.enabled`                        | `true`                          | Master toggle for the voice-activity duck trigger (§6.5)                                                                                                                                 |
 | `voiceDucking.duckVolumePercent`              | `20`                            | Zone volume (0-100) while any voice satellite is active                                                                                                                                  |
 | `voiceDucking.resumeDelaySeconds`             | `1`                             | Delay after a satellite returns to `idle` before restoring its target zones' volume                                                                                                      |
-| `voiceDucking.satelliteZoneMap`               | `{}`                            | Optional `voice.satellites.<id>` → jukebox zone id map (§2, §6.5); satellites with no entry duck all zones (safe fallback)                                                               |
+| `voiceDucking.satelliteZoneMap`               | `[]`                            | Optional array of `{ satelliteId, zoneId }` pairs (§2, §6.5) -- an array of pairs, not a keyed map, confirmed by build-testing: the Admin UI's schema-form library doesn't render a free-form `additionalProperties` map at all, but does render an editable array-of-objects list. Satellites with no entry duck all zones (safe fallback) |
 
 ## 10. MVP Scope
 
@@ -921,7 +922,15 @@ all-zone fallback, volume duck, §2):**
   an operator who cares get precise per-zone behavior; the all-zone
   fallback for anything unmapped means the feature works safely with
   zero configuration, same as before this was sketched — nobody is
-  worse off for the option existing.
+  worse off for the option existing. **The map is an array of
+  `{ satelliteId, zoneId }` pairs, not a `Record<string, string>`** —
+  confirmed by build-testing against the real Admin UI (§13): its
+  schema-form library renders every other plain-object config field on
+  the page fine, but a bare `additionalProperties` map with no fixed
+  `properties` renders nothing at all under its title — no add button, no
+  rows, not even cosmetically broken, just entirely absent. An array of
+  objects uses that same library's well-supported array-of-objects field
+  instead, which does render an editable, add/removable list.
 - **VHF auto-resume tracks `pausedByVhf` rather than unconditionally
   calling `play()` after the delay** — without it, a user who manually
   paused music five minutes before a radio call would have their pause
@@ -976,6 +985,48 @@ all-zone fallback, volume duck, §2):**
   behavior end-to-end (no AirPlay source was exercised), real Spotify
   playback (still blocked on the upstream login5 issue below), and
   anything N2K/Fusion-Link-related (needs real hardware, see below).
+- **Plugin build-tested against a real signalk-server for the first time
+  (2026-08-22, via a `signalk devpod`) — six more real bugs found and
+  fixed, none of them guessable from reading the code alone.**
+  - `package.json` was missing the `signalk-node-server-plugin` keyword
+    signalk-server's plugin scanner filters on — the plugin was
+    completely invisible to the server, not even listed as disabled.
+  - `plugin.start()`'s `{ ...SCHEMA_DEFAULTS, ...rawConfig }` merge
+    silently dropped whole nested settings groups (`backends.radio`,
+    `.spotify`) whenever a saved config didn't happen to repeat every
+    group, crashing startup reading `.enabled` off the resulting
+    `undefined` — easy to hit via a partial config save, not a
+    hypothetical. Fixed with a proper one-level-deep merge
+    (`mergeSettings()`, `src/types.ts`).
+  - `imageTag`'s `"auto"` default (a settings-level sentinel meaning
+    "track latest") was passed straight through to
+    `container.start()` as a literal tag with no `resolveTag` mapping —
+    `signalk-container-helper`'s own README documents this mapping as
+    required for exactly this case; `podman pull ...:auto` 404'd.
+  - The readiness probe (`readiness: { path: "/mopidy/rpc" }`) used a
+    POST-only JSON-RPC endpoint for a plain-GET health check, which
+    always 405'd — the container never registered "ready," and
+    `container.start()` never resolved an address. Switched to the
+    built-in web UI's static index (`/jukebox/`), which answers GET with
+    200.
+  - The reverse proxy (ARCHITECTURE.md §2.2, added this same session) hung
+    indefinitely on every proxied POST (i.e. every Mopidy JSON-RPC call) —
+    signalk-server's own body-parsing middleware had already drained the
+    request stream before the catch-all proxy saw it, so `http-proxy`
+    piped an already-consumed stream while still declaring the original
+    `Content-Length`, and Mopidy hung waiting for bytes that would never
+    arrive. Fixed with `http-proxy-middleware`'s built-in `fixRequestBody`
+    hook, built for exactly this conflict.
+  - `voiceDucking.satelliteZoneMap`'s schema (see §12) rendered as
+    nothing at all in the real Admin UI.
+  - The plugin never appeared in the SignalK webapps list / App Dock:
+    that's a *separate* keyword (`signalk-webapp`) and mechanism (a
+    package's `public/` directory served statically at `/<package-name>/`)
+    from plugin discovery, and the plugin had neither. Added the keyword
+    plus a minimal `public/index.html` that redirects to the plugin's own
+    reverse-proxied web UI path — real content still comes from the
+    running container, this is just what makes the plugin discoverable
+    as a "webapp" in the SignalK sense (ARCHITECTURE.md §7).
 - **shairport-sync metadata pipe: exact parsing approach not chosen.**
   The pipe emits DAAP-tagged binary chunks (a documented but not
   trivially-JSON format — `shairport-sync`'s own docs and reference
