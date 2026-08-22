@@ -8,7 +8,11 @@ import {
 describe("buildLocalSnapclientConfig", () => {
   it("points at the host-gateway alias, not a literal address", () => {
     const config = buildLocalSnapclientConfig("auto", {
-      local: { enabled: true, soundCard: "plughw:CARD=wm8960soundcard,DEV=0", tag: "auto" },
+      local: {
+        enabled: true,
+        soundCard: "plughw:CARD=wm8960soundcard,DEV=0",
+        tag: "auto",
+      },
     });
     expect(config.image).toBe(LOCAL_SNAPCLIENT_IMAGE);
     expect(config.env?.SNAPCAST_HOST).toBe(SK_HOST_ALIAS);

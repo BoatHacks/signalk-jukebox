@@ -14,7 +14,12 @@ async function rpc(method, params) {
   const res = await fetch(RPC_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ jsonrpc: "2.0", id: rpcId, method, params: params || {} }),
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: rpcId,
+      method,
+      params: params || {},
+    }),
   });
   const body = await res.json();
   if (body.error) throw new Error(body.error.message || "RPC error");
@@ -89,8 +94,12 @@ els.nextBtn.addEventListener("click", async () => {
   refresh();
 });
 
-els.volume.addEventListener("mousedown", () => { userIsDraggingVolume = true; });
-els.volume.addEventListener("touchstart", () => { userIsDraggingVolume = true; });
+els.volume.addEventListener("mousedown", () => {
+  userIsDraggingVolume = true;
+});
+els.volume.addEventListener("touchstart", () => {
+  userIsDraggingVolume = true;
+});
 
 els.volume.addEventListener("change", async (e) => {
   await rpc("core.mixer.set_volume", { volume: Number(e.target.value) });
@@ -171,8 +180,12 @@ function buildZoneRow(zone) {
     refreshZones();
   });
 
-  volumeInput.addEventListener("mousedown", () => draggingZoneVolumes.add(zone.id));
-  volumeInput.addEventListener("touchstart", () => draggingZoneVolumes.add(zone.id));
+  volumeInput.addEventListener("mousedown", () =>
+    draggingZoneVolumes.add(zone.id),
+  );
+  volumeInput.addEventListener("touchstart", () =>
+    draggingZoneVolumes.add(zone.id),
+  );
   volumeInput.addEventListener("input", (e) => {
     volumeValue.textContent = `${e.target.value}%`;
   });
@@ -189,13 +202,24 @@ function buildZoneRow(zone) {
     refreshZones();
   });
 
-  return { row, nameDot, nameText, sourceBadge, playBtn, volumeInput, volumeValue, muteBtn, lastMuted: false };
+  return {
+    row,
+    nameDot,
+    nameText,
+    sourceBadge,
+    playBtn,
+    volumeInput,
+    volumeValue,
+    muteBtn,
+    lastMuted: false,
+  };
 }
 
 function updateZoneRow(entry, zone) {
   entry.nameDot.classList.toggle("ok", zone.connected);
   entry.nameText.textContent = zone.name || zone.id;
-  entry.sourceBadge.textContent = zone.activeSource === "jukebox" ? "Jukebox" : "AirPlay";
+  entry.sourceBadge.textContent =
+    zone.activeSource === "jukebox" ? "Jukebox" : "AirPlay";
   entry.sourceBadge.className = `zone-source ${zone.activeSource}`;
   entry.playBtn.disabled = zone.activeSource === "jukebox";
   entry.playBtn.classList.toggle("play-here", true);
@@ -247,7 +271,9 @@ async function refreshZones() {
 
 everywhereBtn.addEventListener("click", async () => {
   await Promise.all(
-    lastZones.map((zone) => zonePost(zone.id, "source", { source: "jukebox" }).catch(() => {})),
+    lastZones.map((zone) =>
+      zonePost(zone.id, "source", { source: "jukebox" }).catch(() => {}),
+    ),
   );
   refreshZones();
 });

@@ -629,29 +629,29 @@ all-zone fallback, volume duck, §2):**
 
 ## 9. Configuration
 
-| Setting                                       | Default                         | Notes                                                                                                                                                                                    |
-| --------------------------------------------- | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `libraryPath`                                 | — (required for local playback) | Host folder bind-mounted read-only via `resolveMount()`                                                                                                                                  |
-| `backends.local.enabled`                      | `true`                          |                                                                                                                                                                                          |
-| `backends.radio.enabled`                      | `false`                         | Internet radio; TuneIn (§12) is currently dropped from the image pending Mopidy-4 compatibility (§13) — direct http(s) stream URIs still play via Mopidy's built-in `stream` extension. Requires internet connectivity, no credentials needed |
-| `backends.spotify.enabled`                    | `false`                         | See the reliability caveat in §5 before enabling — currently degraded upstream                                                                                                           |
-| `backends.spotify.clientId` / `.clientSecret` | —                               | Corrected via research (§13) — Mopidy-Spotify v5.0.0+ requires a registered app's OAuth client credentials, not username/password, which Spotify disabled for third-party login entirely |
-| `imageTag`                                    | `auto`                          | Standard container-helper update-tracking convention                                                                                                                                     |
-| `n2k.enabled`                                 | `false`                         | Master toggle for the N2K/Fusion-Link interface                                                                                                                                          |
-| `n2k.deviceName`                              | `"Jukebox"`                     | Presented as the Fusion device's name on the bus                                                                                                                                         |
-| `n2k.deviceInstance`                          | `0`                             | NMEA2000 device instance, in case a boat somehow runs two jukebox-like devices                                                                                                           |
-| `airplay.enabled`                             | `true`                          | Master toggle for per-zone AirPlay receivers (§6.4)                                                                                                                                      |
-| `airplay.namePattern`                         | `"{boatName} - {zoneName}"`     | mDNS name template a zone's receiver is created with; `{boatName}` sourced from SignalK's own vessel name where available                                                                |
-| `airplay.hostNetworking`                      | `false`                         | Required for AirPlay to actually be discoverable/reachable from real devices (§6.4, §12) — switches the container to `networkMode: host`. Off by default; the operator explicitly opts in |
-| `vhf.enabled`                                 | `true`                          | Master toggle for the VHF pause trigger (§6.5); harmless if no VHF plugin is installed — the path just never fires                                                                       |
-| `vhf.resumeDelaySeconds`                      | `5`                             | Delay after `communication.vhf.busy` clears before auto-resuming                                                                                                                         |
-| `voiceDucking.enabled`                        | `true`                          | Master toggle for the voice-activity duck trigger (§6.5)                                                                                                                                 |
-| `voiceDucking.duckVolumePercent`              | `20`                            | Zone volume (0-100) while any voice satellite is active                                                                                                                                  |
-| `voiceDucking.resumeDelaySeconds`             | `1`                             | Delay after a satellite returns to `idle` before restoring its target zones' volume                                                                                                      |
+| Setting                                       | Default                         | Notes                                                                                                                                                                                                                                                                                                                                       |
+| --------------------------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `libraryPath`                                 | — (required for local playback) | Host folder bind-mounted read-only via `resolveMount()`                                                                                                                                                                                                                                                                                     |
+| `backends.local.enabled`                      | `true`                          |                                                                                                                                                                                                                                                                                                                                             |
+| `backends.radio.enabled`                      | `false`                         | Internet radio; TuneIn (§12) is currently dropped from the image pending Mopidy-4 compatibility (§13) — direct http(s) stream URIs still play via Mopidy's built-in `stream` extension. Requires internet connectivity, no credentials needed                                                                                               |
+| `backends.spotify.enabled`                    | `false`                         | See the reliability caveat in §5 before enabling — currently degraded upstream                                                                                                                                                                                                                                                              |
+| `backends.spotify.clientId` / `.clientSecret` | —                               | Corrected via research (§13) — Mopidy-Spotify v5.0.0+ requires a registered app's OAuth client credentials, not username/password, which Spotify disabled for third-party login entirely                                                                                                                                                    |
+| `imageTag`                                    | `auto`                          | Standard container-helper update-tracking convention                                                                                                                                                                                                                                                                                        |
+| `n2k.enabled`                                 | `false`                         | Master toggle for the N2K/Fusion-Link interface                                                                                                                                                                                                                                                                                             |
+| `n2k.deviceName`                              | `"Jukebox"`                     | Presented as the Fusion device's name on the bus                                                                                                                                                                                                                                                                                            |
+| `n2k.deviceInstance`                          | `0`                             | NMEA2000 device instance, in case a boat somehow runs two jukebox-like devices                                                                                                                                                                                                                                                              |
+| `airplay.enabled`                             | `true`                          | Master toggle for per-zone AirPlay receivers (§6.4)                                                                                                                                                                                                                                                                                         |
+| `airplay.namePattern`                         | `"{boatName} - {zoneName}"`     | mDNS name template a zone's receiver is created with; `{boatName}` sourced from SignalK's own vessel name where available                                                                                                                                                                                                                   |
+| `airplay.hostNetworking`                      | `false`                         | Required for AirPlay to actually be discoverable/reachable from real devices (§6.4, §12) — switches the container to `networkMode: host`. Off by default; the operator explicitly opts in                                                                                                                                                   |
+| `vhf.enabled`                                 | `true`                          | Master toggle for the VHF pause trigger (§6.5); harmless if no VHF plugin is installed — the path just never fires                                                                                                                                                                                                                          |
+| `vhf.resumeDelaySeconds`                      | `5`                             | Delay after `communication.vhf.busy` clears before auto-resuming                                                                                                                                                                                                                                                                            |
+| `voiceDucking.enabled`                        | `true`                          | Master toggle for the voice-activity duck trigger (§6.5)                                                                                                                                                                                                                                                                                    |
+| `voiceDucking.duckVolumePercent`              | `20`                            | Zone volume (0-100) while any voice satellite is active                                                                                                                                                                                                                                                                                     |
+| `voiceDucking.resumeDelaySeconds`             | `1`                             | Delay after a satellite returns to `idle` before restoring its target zones' volume                                                                                                                                                                                                                                                         |
 | `voiceDucking.satelliteZoneMap`               | `[]`                            | Optional array of `{ satelliteId, zoneId }` pairs (§2, §6.5) -- an array of pairs, not a keyed map, confirmed by build-testing: the Admin UI's schema-form library doesn't render a free-form `additionalProperties` map at all, but does render an editable array-of-objects list. Satellites with no entry duck all zones (safe fallback) |
-| `localSnapclient.enabled`                     | `false`                         | Runs a second, optional managed container (`local-snapclient.ts`, §12) -- a Snapclient zone on this SignalK server's own sound card, for speakers wired directly to that machine rather than a separate physical device |
-| `localSnapclient.soundCard`                   | `""`                            | ALSA device string (e.g. `plughw:CARD=wm8960soundcard,DEV=0`); required when enabled, no "auto" fallback -- a bare "default" device is ambiguous on a host with more than one sound card and fails outright (confirmed by build-testing) |
-| `localSnapclient.tag`                         | `"auto"`                        | Image tag for `ghcr.io/boathacks/signalk-jukebox-snapclient`, this project's own minimal Snapclient-only image                                                                          |
+| `localSnapclient.enabled`                     | `false`                         | Runs a second, optional managed container (`local-snapclient.ts`, §12) -- a Snapclient zone on this SignalK server's own sound card, for speakers wired directly to that machine rather than a separate physical device                                                                                                                     |
+| `localSnapclient.soundCard`                   | `""`                            | ALSA device string (e.g. `plughw:CARD=wm8960soundcard,DEV=0`); required when enabled, no "auto" fallback -- a bare "default" device is ambiguous on a host with more than one sound card and fails outright (confirmed by build-testing)                                                                                                    |
+| `localSnapclient.tag`                         | `"auto"`                        | Image tag for `ghcr.io/boathacks/signalk-jukebox-snapclient`, this project's own minimal Snapclient-only image                                                                                                                                                                                                                              |
 
 ## 10. MVP Scope
 
@@ -987,12 +987,12 @@ all-zone fallback, volume duck, §2):**
     (many drivers/APs reject the additional MAC address it needs) —
     which is exactly the interface an iPhone's AirPlay traffic would
     arrive over.
-  Given both alternatives are either broken by this host's networking
-  backend or of uncertain/fragile feasibility, the accepted tradeoff is:
-  AirPlay requires the operator to explicitly opt into host networking
-  (default off) via the config panel's `hostNetworking` toggle, which
-  documents the tradeoff (this container then shares the host's full
-  network namespace and port space) directly in its warning banner.
+    Given both alternatives are either broken by this host's networking
+    backend or of uncertain/fragile feasibility, the accepted tradeoff is:
+    AirPlay requires the operator to explicitly opt into host networking
+    (default off) via the config panel's `hostNetworking` toggle, which
+    documents the tradeoff (this container then shares the host's full
+    network namespace and port space) directly in its warning banner.
 - **A "local snapclient" companion container (`local-snapclient.ts`,
   §9) over expecting every zone to be a separate physical device.** Some
   boats have speakers wired directly to the SignalK server's own
@@ -1047,10 +1047,10 @@ all-zone fallback, volume duck, §2):**
     version pin, and a Snapserver port collision between the deprecated
     `[tcp]` control listener and the always-on `tcp-streaming` audio port
     (both defaulting to 1704).
-  What's still *not* verified by this pass: real AirPlay/shairport-sync
-  behavior end-to-end (no AirPlay source was exercised), real Spotify
-  playback (still blocked on the upstream login5 issue below), and
-  anything N2K/Fusion-Link-related (needs real hardware, see below).
+    What's still _not_ verified by this pass: real AirPlay/shairport-sync
+    behavior end-to-end (no AirPlay source was exercised), real Spotify
+    playback (still blocked on the upstream login5 issue below), and
+    anything N2K/Fusion-Link-related (needs real hardware, see below).
 - **Plugin build-tested against a real signalk-server for the first time
   (2026-08-22, via a `signalk devpod`) — six more real bugs found and
   fixed, none of them guessable from reading the code alone.**
@@ -1073,8 +1073,7 @@ all-zone fallback, volume duck, §2):**
     POST-only JSON-RPC endpoint for a plain-GET health check, which
     always 405'd — the container never registered "ready," and
     `container.start()` never resolved an address. Switched to the
-    built-in web UI's static index (`/jukebox/`), which answers GET with
-    200.
+    built-in web UI's static index (`/jukebox/`), which answers GET with 200.
   - The reverse proxy (ARCHITECTURE.md §2.2, added this same session) hung
     indefinitely on every proxied POST (i.e. every Mopidy JSON-RPC call) —
     signalk-server's own body-parsing middleware had already drained the
@@ -1086,7 +1085,7 @@ all-zone fallback, volume duck, §2):**
   - `voiceDucking.satelliteZoneMap`'s schema (see §12) rendered as
     nothing at all in the real Admin UI.
   - The plugin never appeared in the SignalK webapps list / App Dock:
-    that's a *separate* keyword (`signalk-webapp`) and mechanism (a
+    that's a _separate_ keyword (`signalk-webapp`) and mechanism (a
     package's `public/` directory served statically at `/<package-name>/`)
     from plugin discovery, and the plugin had neither. Added the keyword
     plus a minimal `public/index.html` that redirects to the plugin's own
@@ -1117,16 +1116,16 @@ all-zone fallback, volume duck, §2):**
     removed a nonexistent `metadata_pipename` parameter (confirmed
     against Snapcast's actual source: the metadata pipe path is derived
     internally from pid+port, not settable via the URI).
-  After these fixes, a real `airplay://` stream creates successfully and
-  `avahi-browse` confirms a correctly-named AirPlay (`AirTunes Remote
-  Audio`) service is advertised. `port=` is also confirmed real (pins
-  the RTSP port; Snapcast auto-increments on a bind conflict, confirmed
-  in the source's stderr-handling), which is what keeps each zone's
-  AirPlay traffic inside a small, boundable port range rather than a
-  fully dynamic one — useful background for §12's host-networking
-  decision, though it doesn't change that decision (mDNS itself still
-  needs a real LAN-facing network regardless of how bounded the ports
-  are).
+    After these fixes, a real `airplay://` stream creates successfully and
+    `avahi-browse` confirms a correctly-named AirPlay (`AirTunes Remote
+Audio`) service is advertised. `port=` is also confirmed real (pins
+    the RTSP port; Snapcast auto-increments on a bind conflict, confirmed
+    in the source's stderr-handling), which is what keeps each zone's
+    AirPlay traffic inside a small, boundable port range rather than a
+    fully dynamic one — useful background for §12's host-networking
+    decision, though it doesn't change that decision (mDNS itself still
+    needs a real LAN-facing network regardless of how bounded the ports
+    are).
 - **shairport-sync metadata pipe: exact parsing approach not chosen.**
   The pipe emits DAAP-tagged binary chunks (a documented but not
   trivially-JSON format — `shairport-sync`'s own docs and reference

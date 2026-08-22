@@ -15,7 +15,11 @@ import { SnapserverClient } from "./snapserver-client.js";
 import { startZoneSync } from "./zone-sync.js";
 import { createLocalSnapclient } from "./local-snapclient.js";
 import { publishStateChanges, type AppLike } from "./paths.js";
-import { SCHEMA_DEFAULTS, mergeSettings, type PluginSettings } from "./types.js";
+import {
+  SCHEMA_DEFAULTS,
+  mergeSettings,
+  type PluginSettings,
+} from "./types.js";
 
 // Plugin entry point, following the ManagedContainer archetype
 // (signalk-container-helper README "Quick start: a managed container").

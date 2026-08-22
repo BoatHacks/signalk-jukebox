@@ -38,9 +38,7 @@ export default function PluginConfigurationPanel({
   configuration,
   save,
 }: Props) {
-  const [cfg, setCfg] = useState<Partial<PluginSettings>>(
-    configuration ?? {},
-  );
+  const [cfg, setCfg] = useState<Partial<PluginSettings>>(configuration ?? {});
   const [saved, setSaved] = useState("");
 
   const { status, loading } = useStatusPoll<PlaybackStatus>(
@@ -100,7 +98,9 @@ export default function PluginConfigurationPanel({
                 : (status?.state ?? "unknown")
         }
         state={loading ? undefined : reachable ? "ok" : "error"}
-        link={reachable ? { href: `${BASE}/jukebox/`, label: "Open ↗" } : undefined}
+        link={
+          reachable ? { href: `${BASE}/jukebox/`, label: "Open ↗" } : undefined
+        }
       />
 
       {reachable && (
@@ -254,11 +254,12 @@ export default function PluginConfigurationPanel({
           {!airplay.hostNetworking && (
             <div style={S.infoBanner}>
               AirPlay receivers won&apos;t be discoverable by iPhones/iPads on
-              the boat WiFi with this off. mDNS advertisement and each zone&apos;s
-              dynamically-chosen RTSP/RTP ports don&apos;t reach the LAN through
-              this container&apos;s default networking at all -- there&apos;s no
-              fixed port list to publish the way Snapcast&apos;s stream port can
-              be, since each zone&apos;s AirPlay receiver is created on demand.
+              the boat WiFi with this off. mDNS advertisement and each
+              zone&apos;s dynamically-chosen RTSP/RTP ports don&apos;t reach the
+              LAN through this container&apos;s default networking at all --
+              there&apos;s no fixed port list to publish the way Snapcast&apos;s
+              stream port can be, since each zone&apos;s AirPlay receiver is
+              created on demand.
             </div>
           )}
           {airplay.hostNetworking && (
@@ -280,14 +281,18 @@ export default function PluginConfigurationPanel({
             type="checkbox"
             style={S.checkbox}
             checked={n2k.enabled}
-            onChange={(e) => patch({ n2k: { ...n2k, enabled: e.target.checked } })}
+            onChange={(e) =>
+              patch({ n2k: { ...n2k, enabled: e.target.checked } })
+            }
           />
         </FieldRow>
         <FieldRow label="Device name">
           <input
             style={S.input}
             value={n2k.deviceName}
-            onChange={(e) => patch({ n2k: { ...n2k, deviceName: e.target.value } })}
+            onChange={(e) =>
+              patch({ n2k: { ...n2k, deviceName: e.target.value } })
+            }
           />
         </FieldRow>
         <FieldRow label="Device instance">
@@ -308,7 +313,9 @@ export default function PluginConfigurationPanel({
             type="checkbox"
             style={S.checkbox}
             checked={vhf.enabled}
-            onChange={(e) => patch({ vhf: { ...vhf, enabled: e.target.checked } })}
+            onChange={(e) =>
+              patch({ vhf: { ...vhf, enabled: e.target.checked } })
+            }
           />
         </FieldRow>
         <FieldRow label="Resume delay (seconds)">
@@ -317,7 +324,9 @@ export default function PluginConfigurationPanel({
             type="number"
             value={vhf.resumeDelaySeconds}
             onChange={(e) =>
-              patch({ vhf: { ...vhf, resumeDelaySeconds: Number(e.target.value) } })
+              patch({
+                vhf: { ...vhf, resumeDelaySeconds: Number(e.target.value) },
+              })
             }
           />
         </FieldRow>
@@ -330,7 +339,9 @@ export default function PluginConfigurationPanel({
             style={S.checkbox}
             checked={voiceDucking.enabled}
             onChange={(e) =>
-              patch({ voiceDucking: { ...voiceDucking, enabled: e.target.checked } })
+              patch({
+                voiceDucking: { ...voiceDucking, enabled: e.target.checked },
+              })
             }
           />
         </FieldRow>
@@ -365,7 +376,10 @@ export default function PluginConfigurationPanel({
           />
         </FieldRow>
 
-        <Hint>Per-satellite zone mapping (optional -- unmapped satellites duck all zones)</Hint>
+        <Hint>
+          Per-satellite zone mapping (optional -- unmapped satellites duck all
+          zones)
+        </Hint>
         {voiceDucking.satelliteZoneMap.map((pair, i) => (
           <div key={i} style={S.fieldRow}>
             <input
@@ -375,7 +389,9 @@ export default function PluginConfigurationPanel({
               onChange={(e) => {
                 const next = [...voiceDucking.satelliteZoneMap];
                 next[i] = { ...pair, satelliteId: e.target.value };
-                patch({ voiceDucking: { ...voiceDucking, satelliteZoneMap: next } });
+                patch({
+                  voiceDucking: { ...voiceDucking, satelliteZoneMap: next },
+                });
               }}
             />
             <input
@@ -385,7 +401,9 @@ export default function PluginConfigurationPanel({
               onChange={(e) => {
                 const next = [...voiceDucking.satelliteZoneMap];
                 next[i] = { ...pair, zoneId: e.target.value };
-                patch({ voiceDucking: { ...voiceDucking, satelliteZoneMap: next } });
+                patch({
+                  voiceDucking: { ...voiceDucking, satelliteZoneMap: next },
+                });
               }}
             />
             <Button
@@ -395,7 +413,9 @@ export default function PluginConfigurationPanel({
                 const next = voiceDucking.satelliteZoneMap.filter(
                   (_, j) => j !== i,
                 );
-                patch({ voiceDucking: { ...voiceDucking, satelliteZoneMap: next } });
+                patch({
+                  voiceDucking: { ...voiceDucking, satelliteZoneMap: next },
+                });
               }}
             >
               Remove
@@ -459,10 +479,10 @@ export default function PluginConfigurationPanel({
             </FieldRow>
             {localSnapclient.soundCard.trim() === "" && (
               <div style={S.warnBanner}>
-                An ALSA device is required. A bare "default" device is
-                ambiguous on a host with more than one sound card and fails
-                outright -- run <code>aplay -L</code> on the SignalK server
-                itself and paste the exact device string (e.g.{" "}
+                An ALSA device is required. A bare "default" device is ambiguous
+                on a host with more than one sound card and fails outright --
+                run <code>aplay -L</code> on the SignalK server itself and paste
+                the exact device string (e.g.{" "}
                 <code>plughw:CARD=wm8960soundcard,DEV=0</code>).
               </div>
             )}

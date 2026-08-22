@@ -171,8 +171,14 @@ export function mergeSettings(
     ...SCHEMA_DEFAULTS,
     ...rawConfig,
     backends: {
-      local: { ...SCHEMA_DEFAULTS.backends.local, ...rawConfig.backends?.local },
-      radio: { ...SCHEMA_DEFAULTS.backends.radio, ...rawConfig.backends?.radio },
+      local: {
+        ...SCHEMA_DEFAULTS.backends.local,
+        ...rawConfig.backends?.local,
+      },
+      radio: {
+        ...SCHEMA_DEFAULTS.backends.radio,
+        ...rawConfig.backends?.radio,
+      },
       spotify: {
         ...SCHEMA_DEFAULTS.backends.spotify,
         ...rawConfig.backends?.spotify,

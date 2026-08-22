@@ -1,20 +1,26 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8">
-<title>Jukebox</title>
-<meta http-equiv="refresh" content="0; url=../plugins/signalk-jukebox/jukebox/">
-<script>
-  // signalk-server mounts this file at /signalk-jukebox/ (the "signalk-webapp"
-  // keyword convention, ARCHITECTURE.md §7) purely so the plugin is
-  // discoverable in the webapps list/App Dock -- the actual UI is served by
-  // the running container and reached through this plugin's own reverse
-  // proxy (proxy.ts), not shipped as static files in this npm package. This
-  // page only redirects there; the meta-refresh above is the no-JS fallback.
-  window.location.replace("../plugins/signalk-jukebox/jukebox/");
-</script>
-</head>
-<body>
-<p>Redirecting to <a href="../plugins/signalk-jukebox/jukebox/">Jukebox</a>&hellip;</p>
-</body>
+  <head>
+    <meta charset="utf-8" />
+    <title>Jukebox</title>
+    <meta
+      http-equiv="refresh"
+      content="0; url=../plugins/signalk-jukebox/jukebox/"
+    />
+    <script>
+      // signalk-server mounts this file at /signalk-jukebox/ (the "signalk-webapp"
+      // keyword convention, ARCHITECTURE.md §7) purely so the plugin is
+      // discoverable in the webapps list/App Dock -- the actual UI is served by
+      // the running container and reached through this plugin's own reverse
+      // proxy (proxy.ts), not shipped as static files in this npm package. This
+      // page only redirects there; the meta-refresh above is the no-JS fallback.
+      window.location.replace("../plugins/signalk-jukebox/jukebox/");
+    </script>
+  </head>
+  <body>
+    <p>
+      Redirecting to
+      <a href="../plugins/signalk-jukebox/jukebox/">Jukebox</a>&hellip;
+    </p>
+  </body>
 </html>

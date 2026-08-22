@@ -17,7 +17,11 @@ export interface MopidyProxyState {
 // req to an Express-shaped type.
 interface ExpressRouterLike extends RouterLike {
   use(
-    handler: (req: unknown, res: unknown, next: (err?: unknown) => void) => void,
+    handler: (
+      req: unknown,
+      res: unknown,
+      next: (err?: unknown) => void,
+    ) => void,
   ): unknown;
 }
 

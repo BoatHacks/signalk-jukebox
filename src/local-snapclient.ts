@@ -1,4 +1,7 @@
-import { ManagedContainer, type ContainerConfig } from "signalk-container-helper";
+import {
+  ManagedContainer,
+  type ContainerConfig,
+} from "signalk-container-helper";
 import { SNAPCAST_STREAM_PORT } from "./container.js";
 
 // Local snapclient (SPEC.md §9, §12; ARCHITECTURE.md §2.4) -- an optional
@@ -10,7 +13,8 @@ import { SNAPCAST_STREAM_PORT } from "./container.js";
 // "run a companion container alongside the main one, on this same host"
 // problem for its own local microphone/speaker.
 
-export const LOCAL_SNAPCLIENT_IMAGE = "ghcr.io/boathacks/signalk-jukebox-snapclient";
+export const LOCAL_SNAPCLIENT_IMAGE =
+  "ghcr.io/boathacks/signalk-jukebox-snapclient";
 export const LOCAL_SNAPCLIENT_CONTAINER_NAME = "jukebox-snapclient";
 
 /** In-container alias for the Signal K host (extraHosts host-gateway) --
