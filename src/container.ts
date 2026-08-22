@@ -12,8 +12,8 @@ import type { PluginSettings } from "./types.js";
 // streams at runtime (SPEC.md §6.4, §13) -- no static AirPlay stream pool to
 // configure here.
 //
-// TODO(image): not yet published -- this points at a placeholder registry
-// path until the image is built and pushed per ARCHITECTURE.md §8.
+// Published (ARCHITECTURE.md §8): ghcr.io/boathacks/signalk-jukebox:latest
+// and :0.0.1, public visibility.
 export const JUKEBOX_IMAGE = "ghcr.io/boathacks/signalk-jukebox";
 
 export const MOPIDY_PORT = 6680;
@@ -39,6 +39,14 @@ export function createManagedContainer({
     name: "jukebox",
     image: JUKEBOX_IMAGE,
     defaultTag: "latest",
+    // "auto" (SCHEMA_DEFAULTS.imageTag, §9) is a settings-level sentinel
+    // meaning "track the latest published version" -- signalk-container-
+    // helper's own README documents that `resolveTag` is required to turn
+    // it into a real tag before it reaches podman. Confirmed the hard way
+    // (devpod testing): without this, "auto" is passed straight through
+    // as a literal tag, and `podman pull ...:auto` 404s (no such tag was
+    // ever published).
+    resolveTag: (requested) => (requested === "auto" ? "latest" : requested),
     buildConfig: (tag) => ({
       image: JUKEBOX_IMAGE,
       tag,
