@@ -1,4 +1,12 @@
-const RPC_URL = "/mopidy/rpc";
+// Relative, not "/mopidy/rpc" -- this page is served from the container's
+// own /jukebox/ when hit directly, but from .../jukebox/ behind an
+// arbitrary mount prefix when reverse-proxied (e.g. this project's own
+// plugin, src/proxy.ts). An absolute path resolves against the browser's
+// current origin and skips any such proxy prefix entirely; confirmed by
+// build-testing (SPEC.md §13) that this showed as a permanently
+// "Disconnected" UI despite the container and proxy both actually being
+// healthy. "../mopidy/rpc" resolves correctly in both cases.
+const RPC_URL = "../mopidy/rpc";
 let rpcId = 0;
 
 async function rpc(method, params) {
