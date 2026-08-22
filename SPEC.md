@@ -103,6 +103,12 @@ Questions).
   that zone's own AirPlay receiver) a given zone's Snapclient group is
   currently attached to. Distinct from _master_ playback state, which
   is Mopidy-specific (§4).
+- **Duck trigger** — a SignalK delta path signalk-jukebox subscribes to
+  (published by another plugin, not this one) that automatically pauses
+  or lowers playback volume while active, and restores it afterward
+  (§2, §6.5). Entirely optional — a duck trigger whose source path never
+  appears (the other plugin isn't installed) simply never fires; this
+  plugin has no hard dependency on either one existing.
 
 ### 1.4 Non-goals (v1)
 
@@ -113,8 +119,10 @@ Questions).
   — the plugin's own Admin panel is status/config only.
 - Streaming audio to wyoming-satellite devices (mic/speaker boxes deployed
   for voice) — documented as a future interop question (§13), not built.
-- Voice announcements / TTS ducking into music zones — that is
-  signalk-wyoming's domain, not this plugin's.
+- Synthesizing, routing, or playing announcement audio itself — that
+  remains entirely signalk-wyoming's domain. This plugin only reacts to
+  signalk-wyoming's published state to duck its own playback (§2, §6.5);
+  it never touches announcement audio.
 - Multi-user accounts, playlists-per-user, or any per-crew-member
   personalization — one shared jukebox per boat.
 - Cloud-hosted or off-boat deployments — this assumes Mopidy runs on the
@@ -168,6 +176,32 @@ Questions).
 - **The library mount is read-only.** The plugin never writes into the
   user's music folder; Mopidy only needs read access to scan and stream
   local files.
+- **VHF radio traffic pauses playback boat-wide.** Watching
+  `communication.vhf.busy` (published by the `htool` ICOM VHF plugins,
+  confirmed real — SPEC.md §13; a boolean, receive-side only, see the
+  caveat below), the plugin pauses Mopidy playback the moment it goes
+  `true` and resumes it `vhf.resumeDelaySeconds` (default 5, §9) after it
+  goes `false` — **only if the plugin itself paused it**; a pause the
+  user issued manually (via Iris/REST/N2K) during or before the busy
+  period is never auto-resumed, so the plugin doesn't fight the user
+  (§4 tracks this distinction). This is boat-wide, not per-zone, on the
+  reasoning that radio traffic is safety-relevant and may need to be
+  heard anywhere aboard (§12). **Caveat, confirmed via research (§13):**
+  `communication.vhf.busy` only reflects incoming channel activity
+  (squelch opening) — there is no path for your own outgoing
+  transmission (PTT) in either source plugin, so this only ducks for
+  calls you're receiving, not ones you're making.
+- **Voice-assistant activity ducks (lowers, doesn't pause) playback.**
+  Watching signalk-wyoming's own `voice.satellites.<id>.state` paths (if
+  installed — another optional, not-required integration), the plugin
+  lowers zone volume while any satellite is non-`idle` and restores it
+  once all are `idle` again, following the precedent of
+  [FutureProofHomes' wyoming-enhancements](https://github.com/FutureProofHomes/wyoming-enhancements)
+  project (§12) — a volume dip under continuing audio, not a stop, since
+  voice interactions are typically short and the point is intelligibility
+  during them, not a hard interruption. MVP ducks **all zones**, not just
+  the zone physically near the speaking satellite — see §13 for why a
+  proper per-zone mapping isn't in MVP.
 - **Every zone gets its own AirPlay receiver, drawn from a fixed pool of
   pre-provisioned slots (§6.4).** Snapcast's control API cannot create
   `airplay`-type streams at runtime (deliberately blocked as a security
@@ -274,9 +308,14 @@ copy.
   (§2), independent of whether that Snapclient is currently connected.
   Both numbers are assigned once, the first time a Snapclient is seen,
   and never reassigned automatically thereafter.
+- **DuckState** (plugin-internal, not persisted — §8) — `{ pausedByVhf: boolean, duckedByVoice: boolean, preDuckZoneVolumes: Record<zoneId, number> }`.
+  `pausedByVhf` is what makes the VHF auto-resume rule (§2) not fight a
+  manual pause; `preDuckZoneVolumes` is what voice ducking restores to,
+  captured at the moment ducking starts (§2, §12 — the accepted
+  simplification if a user changes a zone's volume _during_ a duck).
 - **PluginSettings** — backend toggles, library path, Spotify credentials
-  (if enabled), image tag, N2K/Fusion enable + device identity settings.
-  See §9.
+  (if enabled), image tag, N2K/Fusion enable + device identity settings,
+  duck-trigger settings. See §9.
 
 ## 5. Sources / Inputs
 
@@ -293,6 +332,11 @@ copy.
   as internet radio.
 - **Zone list** — read from Snapserver's own control API (JSON-RPC), not
   configured by the user.
+- **Duck triggers** (§6.5) — `communication.vhf.busy` and
+  `voice.satellites.<id>.state`, both published by other, optional
+  plugins (the `htool` ICOM VHF plugins and signalk-wyoming
+  respectively). Neither is a SignalK-spec-standard path; both are
+  treated as absent-by-default, not a required dependency (§2).
 
 If a backend is unreachable (no internet, bad Spotify credentials), the
 other backends continue to work — one backend's failure never blocks
@@ -444,6 +488,40 @@ boat-wide toggle and pool size in §9.
   append the Snapclient id) rather than silently advertise two identical
   AirPlay targets — exact scheme TBD at implementation time.
 
+### 6.5 Duck Triggers
+
+Two independent, optional subscriptions to external SignalK deltas —
+neither requires the other plugin to exist; a missing path just means
+that trigger never fires (§2). Both are implemented as plain delta
+subscribers writing to canonical state via the normal write path (§3.2),
+not a bespoke cross-plugin API — chosen specifically to avoid coupling
+this plugin's behavior to another plugin's API surface/version (§12).
+
+**VHF (`communication.vhf.busy` → boat-wide pause, §2):**
+
+- On `true`: if not already paused, call Mopidy `pause()` and set
+  `DuckState.pausedByVhf = true`.
+- On `false`: after `vhf.resumeDelaySeconds`, if `pausedByVhf` is still
+  `true` (i.e. nothing else changed playback in the meantime — see §12
+  for why this check exists), call Mopidy `play()` and clear the flag.
+- If a manual pause/play command arrives while `pausedByVhf` is `true`,
+  clear the flag without altering the manual command's effect — the user
+  just took over.
+
+**Voice (`voice.satellites.<id>.state` → all-zone volume duck, §2):**
+
+- On any satellite transitioning to a non-`idle` state while
+  `duckedByVoice` is `false`: capture every zone's current volume into
+  `preDuckZoneVolumes`, set `duckedByVoice = true`, and lower every
+  zone's Snapcast client volume to `voiceDucking.duckVolumePercent` (§9)
+  via `Client.SetVolume` (confirmed dynamic, no restart — SPEC.md §13).
+- On every satellite returning to `idle`: after
+  `voiceDucking.resumeDelaySeconds` (§9), restore each zone's volume from
+  `preDuckZoneVolumes` and clear `duckedByVoice`.
+- A zone the user manually changed the volume of _during_ a duck has
+  that change overwritten on restore — an accepted simplification (§12),
+  not solved.
+
 ## 7. User Interface
 
 - **Iris** (Mopidy's web client) — reverse-proxied at
@@ -491,6 +569,11 @@ boat-wide toggle and pool size in §9.
 | `airplay.enabled`                                                                                                | `true`                          | Master toggle for per-zone AirPlay receivers (§6.4)                                                                       |
 | `airplay.maxZones`                                                                                               | `4`                             | Size of the pre-provisioned AirPlay stream pool (§6.4); zones beyond this get no AirPlay slot                             |
 | `airplay.namePattern`                                                                                            | `"{boatName} - {zoneName}"`     | mDNS name template for a slot once claimed by a zone; `{boatName}` sourced from SignalK's own vessel name where available |
+| `vhf.enabled`                                                                                                    | `true`                          | Master toggle for the VHF pause trigger (§6.5); harmless if no VHF plugin is installed — the path just never fires        |
+| `vhf.resumeDelaySeconds`                                                                                         | `5`                             | Delay after `communication.vhf.busy` clears before auto-resuming                                                          |
+| `voiceDucking.enabled`                                                                                           | `true`                          | Master toggle for the voice-activity duck trigger (§6.5)                                                                  |
+| `voiceDucking.duckVolumePercent`                                                                                 | `20`                            | Zone volume (0-100) while any voice satellite is active                                                                   |
+| `voiceDucking.resumeDelaySeconds`                                                                                | `1`                             | Delay after all satellites return to `idle` before restoring volume                                                       |
 
 ## 10. MVP Scope
 
@@ -514,6 +597,9 @@ boat-wide toggle and pool size in §9.
 - Per-zone AirPlay receivers (§6.4): dynamically provisioned/torn down
   with each zone, replacing that zone's audio while a session is active,
   reverting to the Jukebox source when it ends.
+- Duck triggers (§6.5): boat-wide pause on `communication.vhf.busy`,
+  all-zone volume duck on `voice.satellites.*.state`, both optional and
+  degrading silently when their source path never appears.
 - Standard container-helper update flow (version dropdown, check/apply).
 
 ### 10.2 Post-MVP / Deferred
@@ -528,9 +614,11 @@ boat-wide toggle and pool size in §9.
   requirement later.
 - **Custom control UI beyond Iris** — not planned unless Iris proves
   insufficient in practice.
-- **Announcement ducking (voice interrupting music)** — belongs to
-  signalk-wyoming's roadmap, not this plugin's, until/unless that
-  integration is scoped jointly.
+- **Producing or routing announcement audio itself** — synthesizing and
+  playing TTS audio into zones remains signalk-wyoming's domain entirely.
+  What _is_ in scope (§2, §6.5): signalk-jukebox reacting — ducking or
+  pausing its own playback — to signalk-wyoming's and other plugins'
+  already-published SignalK state, without ever handling their audio.
 - **Android-equivalent casting** (Chromecast/Bluetooth/DLNA, §1.4) —
   deferred until the per-zone AirPlay model above is built and proven;
   which specific target to build depends partly on how AirPlay's
@@ -546,6 +634,17 @@ boat-wide toggle and pool size in §9.
 - [signalk-wyoming](https://github.com/hoeken/signalk-wyoming) — sibling voice-assistant plugin family; its SPEC.md documents the non-goal/stretch-goal boundary referenced in §1.2.
 - [Mopidy](https://mopidy.com/) / [Mopidy-Spotify](https://github.com/mopidy/mopidy-spotify) / [Iris](https://github.com/jaedb/Iris)
 - [Snapcast](https://github.com/badaix/snapcast)
+- [FutureProofHomes/wyoming-enhancements](https://github.com/FutureProofHomes/wyoming-enhancements) —
+  the researched precedent for voice-activity ducking (§6.5, §12): a
+  wake-word `--detection-command`/`--tts-stop-command` pair that dips and
+  restores a PulseAudio sink's volume around a voice interaction. The
+  mechanism this project adapts is "duck via volume, not stream-swap";
+  their implementation runs the Snapcast client and Wyoming satellite
+  colocated on one PulseAudio device, which this plugin's design doesn't
+  assume (§13).
+- [htool/signalk-icom-m510e-plugin](https://github.com/htool/signalk-icom-m510e-plugin) and
+  [htool/signalk-icom-ct-m500-plugin](https://github.com/htool/signalk-icom-ct-m500-plugin) —
+  source of the confirmed `communication.vhf.busy` path (§6.5, §13).
 - [Canboat](https://github.com/canboat/canboat) — the community-maintained
   NMEA2000 PGN definition database; source for the standard Entertainment
   PGN definitions (§6.3) and a common reference point for reverse-engineered
@@ -659,6 +758,42 @@ boat-wide toggle and pool size in §9.
   Cockpit") was for someone to find the right one without being told
   which number maps to which speaker — that benefit is worth one brief
   boat-wide audio bounce per zone's lifetime, paid once.
+- **Duck triggers are plain delta subscriptions, not a cross-plugin API**
+  — considered and rejected the alternative (signalk-jukebox exposing a
+  "duck me" API that signalk-wyoming/a VHF plugin calls into, or vice
+  versa). Watching already-published SignalK state means neither plugin
+  needs to know the other exists, ships against, or version-matches
+  anything — the exact same "state, not API" pattern the rest of this
+  plugin's own interfaces already follow (§3.2, ARCHITECTURE.md §2.1).
+  The cost: this plugin can only react to what those plugins choose to
+  publish, and both integrations are hostage to those paths never
+  changing shape — accepted, since REST/N2K/etc. face the identical
+  "someone else's contract" risk already.
+- **VHF ducking is a hard pause (via Mopidy), voice ducking is a volume
+  dip (via Snapcast client volume)** — different mechanisms for a
+  reason: VHF traffic needs to be intelligible without any music
+  competing (safety-relevant, §2), while a voice interaction is short
+  and the FutureProofHomes precedent (§11) shows a volume dip is enough
+  to keep it intelligible without fully silencing the room. Using
+  `Client.SetVolume` for the duck (rather than a Snapcast stream-swap,
+  the mechanism this doc originally reached for) was possible once
+  research confirmed it's fully dynamic — unlike stream creation, no
+  restart involved (SPEC.md §13, ARCHITECTURE.md §5).
+- **Voice ducking defaults to all zones, not per-zone** — a proper
+  per-zone duck would need to know which Snapclient physically
+  corresponds to which `voice.satellites.<id>`, and neither plugin's
+  naming guarantees that correlation (a satellite id like `"cockpit"`
+  doesn't mechanically imply a Snapclient named the same thing exists,
+  or is the right one). Rather than build a fragile heuristic or force
+  the user to hand-configure a mapping for MVP, ducking everything is the
+  safe default — worth revisiting (§13) once real usage shows whether
+  the correlation problem is worth solving.
+- **VHF auto-resume tracks `pausedByVhf` rather than unconditionally
+  calling `play()` after the delay** — without it, a user who manually
+  paused music five minutes before a radio call would have their pause
+  silently overridden the moment the call ended, which is a much worse
+  surprise than the feature's entire point (not interrupting the user
+  unexpectedly).
 - **Leaving a disconnected zone's AirPlay slot running rather than
   tearing it down** — the alternative (restart to remove it, then
   restart again if the zone reconnects) would mean _every_ zone
@@ -685,6 +820,29 @@ boat-wide toggle and pool size in §9.
   finalizing the config schema in §9 — Spotify's own auth requirements
   for third-party clients have changed over time and librespot-based
   integrations have had stability issues historically.
+- **VHF `.busy` is receive-only — confirmed via research, accepted as a
+  known gap.** Neither `htool` ICOM plugin publishes anything for your
+  own outgoing transmission (PTT) — `communication.vhf.busy` only
+  reflects incoming channel activity (squelch opening). So VHF ducking
+  only fires for calls you're receiving, not ones you're making;
+  covering outgoing PTT would need a feature request against those
+  plugins (or a different radio integration entirely) — not something
+  fixable from this side. Documented as a real, permanent limitation of
+  this integration, not a TODO.
+- **Per-zone voice ducking, if the satellite↔zone correlation problem
+  gets solved.** MVP ducks all zones (§12); a real per-zone
+  implementation would need either a user-configured
+  `voice.satellites.<id>` → jukebox-zone-id mapping, or some
+  auto-detection heuristic (e.g. matching on name) that doesn't yet
+  exist and would need designing jointly with signalk-wyoming to be
+  reliable, not guessed at unilaterally here.
+- **Restoring a zone's volume after a voice duck when the user changed
+  it mid-duck.** Current design overwrites whatever the user set during
+  the duck with the pre-duck value (§6.5, §12) — same category of
+  "known simplification, not solved" as the AirPlay pool's phantom-slot
+  behavior. Worth watching for real complaints before adding the
+  complexity of tracking "did the user touch this since ducking
+  started."
 - **Internet radio extension choice.** Mopidy-TuneIn vs. a
   self-maintained curated station list vs. another extension — not yet
   decided; affects §9's `backends.radio.*` schema shape.

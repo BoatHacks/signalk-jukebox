@@ -192,7 +192,28 @@ other directly) when a command arrives on its interface.
   precedent of signalk-wyoming's purpose-built `wyoming-satellite` image
   for the same "glue upstream processes together" reason.
 
-### 2.5 External: Snapclients
+### 2.5 Duck-trigger adapter
+
+- Subscribes to two external, optional SignalK delta paths —
+  `communication.vhf.busy` (confirmed real, published by the `htool`
+  ICOM VHF plugins) and `voice.satellites.<id>.state` (signalk-wyoming)
+  — via SignalK's normal `app.streambundle`/subscription mechanism, the
+  same way any plugin consumes another plugin's deltas. Neither plugin
+  is a listed dependency; a missing path is a normal, silent no-op
+  (SPEC.md §2, §5).
+- On VHF busy/clear, calls `MopidyClient.pause()`/`play()` directly
+  (SPEC.md §6.5) and tracks `DuckState.pausedByVhf` so the auto-resume
+  never overrides a manual pause.
+- On voice satellite state transitions, calls
+  `SnapserverClient.setClientVolume()` per zone (SPEC.md §6.5) — this
+  is the same fully-dynamic RPC call the REST volume route uses
+  (ARCHITECTURE.md §5), not a new capability.
+- `DuckState` (SPEC.md §4) is held in-memory only, not part of the
+  canonical `CanonicalState`/`StateStore` (§2.1) and not persisted (§8)
+  — it's internal bookkeeping for this adapter's own restore logic, not
+  state any other interface needs to read.
+
+### 2.6 External: Snapclients
 
 Not part of this repo. Any Snapcast-compatible client on the boat LAN
 that connects to this container's Snapserver becomes a zone automatically
@@ -262,6 +283,15 @@ ts-pgns` (the structured PGN library `signalk-fusion-stereo` uses for
   its Fusion PGN 126720 message construction) is a candidate dependency
   worth evaluating during implementation rather than hand-rolling PGN
   encode/decode from scratch.
+- **`communication.vhf.busy`** (ARCHITECTURE.md §2.5) — an external,
+  optional delta from the `htool` ICOM VHF plugins, not a SignalK-spec-
+  standard path (confirmed via reading those plugins' source, SPEC.md
+  §13). Receive-side only; no outgoing-PTT equivalent exists to consume.
+- **`voice.satellites.<id>.state`** (ARCHITECTURE.md §2.5) — an
+  external, optional delta from signalk-wyoming. This plugin has no
+  dependency on signalk-wyoming's package existing; it only reads
+  whatever delta happens to be on that path, exactly as it would from
+  any other plugin publishing it.
 - **SignalK server** — standard plugin lifecycle (`start`/`stop`/
   `registerWithRouter`/`schema`), `app.setPluginStatus`/`setPluginError`,
   delta publishing for `entertainment.jukebox.*` paths, and PUT handling
@@ -348,6 +378,9 @@ signalk-jukebox/
 │   ├── airplay/
 │   │   ├── pool.ts             # static N-slot stream config generation + Snapserver restart-on-claim (§2.2, §6.4)
 │   │   └── zone-binding.ts     # dynamic Group.SetClients/SetStream bind/unbind, no restart (§2.2, §6.4)
+│   ├── duck-triggers/
+│   │   ├── vhf.ts              # communication.vhf.busy -> Mopidy pause/resume (§2.5, SPEC.md §6.5)
+│   │   └── voice.ts            # voice.satellites.*.state -> zone volume duck/restore (§2.5, SPEC.md §6.5)
 │   ├── routes.ts              # /api/* Express routes
 │   ├── paths.ts                # entertainment.* SK path publishing
 │   ├── configpanel/            # React admin panel (signalk-container-helper/ui)
@@ -435,6 +468,14 @@ signalk-jukebox/
   become a per-zone or boat-wide config toggle if unauthenticated
   receivers prove to be a real problem in practice rather than a
   theoretical one.
+- **Per-zone voice ducking** (SPEC.md §13) — needs a
+  `voice.satellites.<id>` -> jukebox-zone-id correlation that doesn't
+  exist yet; MVP ducks all zones as the safe default.
+- **Outgoing VHF (PTT) ducking** (SPEC.md §13) — not possible today; the
+  `htool` ICOM plugins don't publish anything for it. Would need a
+  feature request against those plugins (or a different radio
+  integration) before this plugin could react to it — not something to
+  build speculatively here.
 - **AirPlay now-playing metadata surfaced further** (SPEC.md §13) — if
   the "stale info during someone else's AirPlay session" gap proves
   annoying, `shairport-sync`'s metadata pipe could feed track/artist into
