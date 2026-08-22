@@ -43,12 +43,15 @@ are equivalent: the state updates once, and every other interface reflects
 it immediately. No interface is a passive mirror of another; they are all
 peers reading and writing the same canonical state (see §3, §12).
 
-The primary human control surfaces are Mopidy's own web client
-([Iris](https://github.com/jaedb/Iris)), reverse-proxied through the
-SignalK server, and any Fusion-Link-compatible MFD already on the boat.
-The plugin's own SignalK Admin config panel handles container lifecycle,
-image updates, N2K/Fusion configuration, and zone volume/mute — it is not
-a player.
+The primary human control surfaces are Mopidy's own web client, reverse-
+proxied through the SignalK server, and any Fusion-Link-compatible MFD
+already on the boat. The intended web client is
+[Iris](https://github.com/jaedb/Iris) (§12); as of this writing it ships
+as a minimal hand-rolled substitute instead, because Iris isn't compatible
+with the Mopidy version this project currently requires (§12, §13) — swap
+back once that's resolved upstream. The plugin's own SignalK Admin config
+panel handles container lifecycle, image updates, N2K/Fusion
+configuration, and zone volume/mute — it is not a player.
 
 ### 1.2 Background
 
@@ -330,10 +333,16 @@ copy.
   container (§8/§9). If the path is missing or empty, Mopidy starts with
   an empty local library and the plugin surfaces a status warning, not a
   fatal error.
-- **Internet radio** — a Mopidy radio-station extension (e.g.
-  Mopidy-TuneIn or a curated station list); requires internet
-  connectivity to resolve streams, gracefully unavailable when offline
-  (boats lose connectivity — this must not be treated as an error state).
+- **Internet radio** — intended via Mopidy-TuneIn (§12), currently dropped
+  from the image: confirmed by build-testing that it doesn't load against
+  the Mopidy version this project requires (§12, §13), the same
+  incompatibility affecting Iris. Mopidy's built-in `stream` extension
+  still plays any http(s) audio URL directly with no extension at all,
+  which covers actual playback — only TuneIn's searchable station
+  directory is lost until it (or a replacement) regains compatibility.
+  Requires internet connectivity to resolve streams either way, gracefully
+  unavailable when offline (boats lose connectivity — this must not be
+  treated as an error state).
 - **Spotify** — Mopidy-Spotify, requires a Spotify Premium account, a
   registered app's `client_id`/`client_secret` (not username/password —
   Spotify disabled that login path entirely; corrected via research,
@@ -373,9 +382,9 @@ signalk-container-helper conventions):
 | `GET /api/update/check` / `POST /api/update/apply` | Image update routes (`registerUpdateRoutes`, admin-only) |
 | `GET /api/versions`                                | Image version list for the config panel dropdown         |
 
-Actual playback control (play/pause/skip/queue/search) goes through Iris
-directly against Mopidy's own HTTP/JSON-RPC API — this plugin does not
-proxy or re-implement it.
+Actual playback control (play/pause/skip/queue/search) goes through the
+web client (§7) directly against Mopidy's own HTTP/JSON-RPC API — this
+plugin does not proxy or re-implement it.
 
 ### 6.2 SignalK Paths / Events
 
@@ -578,10 +587,15 @@ all-zone fallback, volume duck, §2):**
 
 ## 7. User Interface
 
-- **Iris** (Mopidy's web client) — reverse-proxied at
-  `/signalk-jukebox` (or similar), the primary and only playback control
-  surface. Standard Iris UI: search, browse library, queue, playlists.
-  No SignalK-specific modifications to Iris itself in MVP.
+- **Web client** — reverse-proxied at `/signalk-jukebox` (or similar), the
+  primary and only playback control surface. The intended client is
+  **Iris** (§12): search, browse library, queue, playlists, no
+  SignalK-specific modifications needed. Currently substituted with a
+  minimal hand-rolled UI (`image/webui`) — confirmed by build-testing that
+  Iris doesn't load against the Mopidy version this project requires
+  (§12, §13) — offering only transport controls, volume, and a "play this
+  URI" box, with no search/browse/queue/playlist management. Swap back to
+  Iris once it publishes a compatible release.
 - **SignalK Admin config panel** (this plugin, using
   `signalk-container-helper/ui` building blocks) — container status card,
   image-version dropdown + update controls, backend enable/disable
@@ -618,7 +632,7 @@ all-zone fallback, volume duck, §2):**
 | --------------------------------------------- | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `libraryPath`                                 | — (required for local playback) | Host folder bind-mounted read-only via `resolveMount()`                                                                                                                                  |
 | `backends.local.enabled`                      | `true`                          |                                                                                                                                                                                          |
-| `backends.radio.enabled`                      | `false`                         | Internet radio via Mopidy-TuneIn (§12); requires internet connectivity, no credentials needed                                                                                            |
+| `backends.radio.enabled`                      | `false`                         | Internet radio; TuneIn (§12) is currently dropped from the image pending Mopidy-4 compatibility (§13) — direct http(s) stream URIs still play via Mopidy's built-in `stream` extension. Requires internet connectivity, no credentials needed |
 | `backends.spotify.enabled`                    | `false`                         | See the reliability caveat in §5 before enabling — currently degraded upstream                                                                                                           |
 | `backends.spotify.clientId` / `.clientSecret` | —                               | Corrected via research (§13) — Mopidy-Spotify v5.0.0+ requires a registered app's OAuth client credentials, not username/password, which Spotify disabled for third-party login entirely |
 | `imageTag`                                    | `auto`                          | Standard container-helper update-tracking convention                                                                                                                                     |
@@ -643,12 +657,14 @@ all-zone fallback, volume duck, §2):**
 - Local library via read-only bind mount (`resolveMount`).
 - Internet radio and Spotify backends, both optional/toggleable from the
   Admin panel.
-- Iris reverse-proxied as the control surface.
+- Web client reverse-proxied as the control surface — currently the
+  minimal built-in UI, Iris once compatible (§7, §12).
 - Multi-zone audio via Snapcast; zones auto-discovered (read-only list +
   volume/mute) in the Admin panel.
 - Plugin-managed queue/position snapshot + restore across restarts.
-- A canonical shared-state store (§3, §4, ARCHITECTURE.md §2) that Iris/
-  Mopidy, REST, SK paths, and N2K/Fusion all read and write through.
+- A canonical shared-state store (§3, §4, ARCHITECTURE.md §2) that the web
+  client/Mopidy, REST, SK paths, and N2K/Fusion all read and write
+  through.
 - Basic `entertainment.jukebox.*` SignalK paths (§6.2), PUT-able.
 - NMEA2000/Fusion-Link interface (§6.3): Fusion stereo emulation
   (broadcast + accept commands), stable zone-to-N2K-zone mapping, plus
@@ -726,7 +742,19 @@ all-zone fallback, volume duck, §2):**
   maintained web client with search/browse/queue/playlist management.
   Building a competing UI would be pure duplication for no boat-specific
   benefit; the plugin's job is container lifecycle and zone control, which
-  Iris doesn't do.
+  Iris doesn't do. **Currently superseded by necessity, not by choice**
+  (§13): confirmed by build-testing that Iris (and Mopidy-TuneIn) still
+  call Mopidy-3-era internals (`mopidy.internal`, `mopidy.models.serialize`)
+  that Mopidy 4.x removed, and Iris tracks this as an open, unresolved
+  upstream issue ([jaedb/Iris#999](https://github.com/jaedb/Iris/issues/999)).
+  Since this project's Mopidy-Spotify dependency (§5) needs Mopidy ≥4.0,
+  Iris is temporarily replaced with a minimal hand-rolled substitute
+  (`image/webui` — a small custom Mopidy extension serving transport/
+  volume/play-URI controls against Mopidy's existing JSON-RPC, using the
+  same `http:app` registry mechanism Iris itself uses) rather than
+  blocking on an upstream fix with no ETA. Swap back once Iris publishes a
+  Mopidy-4-compatible release — nothing about this plugin's own state
+  store or interfaces depends on which web client is mounted.
 - **Combined Mopidy+Snapserver image over two containers** — one
   `ManagedContainer` instance, one lifecycle, no inter-container network
   wiring to get wrong; matches the precedent set by signalk-wyoming's
@@ -768,7 +796,34 @@ all-zone fallback, volume duck, §2):**
   available station catalog, browsable in Iris out of the box. Chosen
   over a self-maintained curated station list, which would need someone
   to pick and maintain stream URLs for no real benefit over an existing,
-  actively-used directory service.
+  actively-used directory service. **Currently dropped from the image**
+  (§13): confirmed by build-testing the same Mopidy-4 incompatibility
+  affecting Iris above — TuneIn crashes on the same removed internals.
+  Not replaced with a substitute the way Iris was, because Mopidy's
+  built-in `stream` extension already plays any http(s) audio URL with no
+  extension at all; only TuneIn's searchable station directory is lost,
+  not radio playback itself. Re-add if TuneIn (or an alternative) regains
+  Mopidy-4 compatibility.
+- **Debian trixie over bookworm for the container base image** — Mopidy
+  4.x (required by the current, non-deprecated Mopidy-Spotify 5.0.0,
+  which needs Mopidy ≥4.0) itself requires Python ≥3.13; bookworm ships
+  3.11, trixie ships 3.13. Confirmed by build-testing that
+  `apt.mopidy.com` (the previously assumed install path, §6, §12 history)
+  is stuck serving Mopidy 3.4.2 on every Debian dist it publishes for, not
+  just bookworm — switching apt dists wouldn't have solved it. Mopidy and
+  its extensions install from PyPI instead, which resolves cleanly on
+  Python 3.13.
+- **Snapserver's control API is a raw newline-delimited JSON-RPC-over-TCP
+  protocol, not HTTP** — confirmed by build-testing against a real
+  Snapserver 0.35.0: the config section conventionally named `[http]`
+  does not parse real HTTP requests at all; sending one makes the server
+  try to JSON-parse the literal request bytes and fail. This plugin's
+  Snapserver client (`src/snapserver-client.ts`) was originally written
+  against an assumed real-HTTP `POST /jsonrpc` contract (a reasonable
+  assumption from Snapcast's own historical docs and web-client precedent,
+  but not what this version's control port actually does) and has been
+  rewritten to a raw socket client accordingly, verified end-to-end
+  against a real Snapserver with a connected `snapclient`.
 - **One canonical state store, all interfaces as peers** — considered and
   rejected: keeping Mopidy as the sole source of truth and having N2K/
   Fusion/REST be one-way mirrors of it (the model this doc originally
@@ -893,6 +948,34 @@ all-zone fallback, volume duck, §2):**
 
 ## 13. Open Questions
 
+- **Container image build-tested for the first time (2026-08-22) — several
+  assumptions turned out wrong, now fixed and re-verified.** Previously
+  the image and `snapserver-client.ts` were both written without a
+  container runtime available to test against; a session with real Docker
+  (Podman) access built and ran the actual stack and found:
+  - Mopidy 4.x (needed for the non-deprecated Mopidy-Spotify 5.0.0) breaks
+    Iris and Mopidy-TuneIn, which still call removed Mopidy-3 internals —
+    see §12's Iris/TuneIn/trixie decisions for the resolution (minimal
+    built-in web UI, TuneIn dropped, base image switched to trixie).
+  - Snapserver's control port doesn't speak real HTTP despite its config
+    section being named `[http]` — see §12's Snapserver decision.
+    `snapserver-client.ts`'s `Server.GetStatus` handling had two further
+    bugs surfaced by this: the response nests groups under
+    `result.server.groups` (not `result.groups`), and raw group/client
+    JSON uses `stream_id`/`config.volume.{percent,muted}` rather than this
+    client's own camelCase field names — both fixed and verified against
+    a real Snapserver with a connected `snapclient`.
+  - Smaller config bugs also caught and fixed: an apt keyring path
+    mismatch that broke Mopidy's own (now-abandoned, see §12) apt repo,
+    Mopidy 4.x's path-expansion no longer resolving `$XDG_MUSIC_DIR` in
+    the `m3u`/`file` extensions' defaults, a `pkg_resources`/setuptools
+    version pin, and a Snapserver port collision between the deprecated
+    `[tcp]` control listener and the always-on `tcp-streaming` audio port
+    (both defaulting to 1704).
+  What's still *not* verified by this pass: real AirPlay/shairport-sync
+  behavior end-to-end (no AirPlay source was exercised), real Spotify
+  playback (still blocked on the upstream login5 issue below), and
+  anything N2K/Fusion-Link-related (needs real hardware, see below).
 - **shairport-sync metadata pipe: exact parsing approach not chosen.**
   The pipe emits DAAP-tagged binary chunks (a documented but not
   trivially-JSON format — `shairport-sync`'s own docs and reference
