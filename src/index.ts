@@ -6,6 +6,7 @@ import {
 import { createManagedContainer, MOPIDY_PORT } from "./container.js";
 import { StateStore, createInitialState } from "./state/store.js";
 import { registerRoutes } from "./routes.js";
+import { registerMopidyProxy, type MopidyProxyState } from "./proxy.js";
 import { publishStateChanges, type AppLike } from "./paths.js";
 import { SCHEMA_DEFAULTS, mergeSettings, type PluginSettings } from "./types.js";
 
@@ -28,6 +29,9 @@ export default function plugin(app: App) {
   let settings: PluginSettings = SCHEMA_DEFAULTS;
   const store = new StateStore(createInitialState());
   let unpublish: (() => void) | null = null;
+  // Filled in once container.start() resolves an address (registerWithRouter
+  // runs synchronously before that) -- see proxy.ts.
+  const proxyState: MopidyProxyState = { address: null };
 
   const jukebox = {
     id: "signalk-jukebox",
@@ -63,13 +67,13 @@ export default function plugin(app: App) {
 
         container = createManagedContainer({ app, settings, libraryMount });
         const { address } = await container.start(settings.imageTag);
-        void address; // base URL for the Mopidy/Iris reverse proxy (TODO below)
+        proxyState.address = address;
 
-        // TODO(implementation): reverse-proxy Iris/Mopidy's web UI at this
-        // plugin's path using `address`, and wire up mopidy-client.ts /
+        // TODO(implementation): wire up mopidy-client.ts /
         // snapserver-client.ts polling loops that feed the StateStore --
-        // this is the next layer to build once the container image
-        // (ARCHITECTURE.md §2.4, image/Dockerfile) exists to test against.
+        // this is the next layer to build now that the reverse proxy
+        // (proxy.ts) and container image (ARCHITECTURE.md §2.4) exist to
+        // test against.
 
         // TODO(implementation): if settings.n2k.enabled, construct
         // FusionAdapter/EntertainmentPgnAdapter (n2k/fusion.ts,
@@ -85,6 +89,7 @@ export default function plugin(app: App) {
     async stop() {
       unpublish?.();
       unpublish = null;
+      proxyState.address = null;
       await container?.stop(); // unregister updates + stop, never throws
       app.setPluginStatus("Stopped");
     },
@@ -104,6 +109,10 @@ export default function plugin(app: App) {
           app.savePluginOptions(settings, () => undefined);
         },
       });
+
+      // Catch-all -- must be registered last, after every specific route
+      // above (proxy.ts).
+      registerMopidyProxy(router, proxyState);
     },
 
     schema: () => ({

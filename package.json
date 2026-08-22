@@ -47,6 +47,7 @@
     ]
   },
   "dependencies": {
+    "http-proxy-middleware": "^3.0.7",
     "signalk-container-helper": "^0.7.0"
   },
   "peerDependencies": {
