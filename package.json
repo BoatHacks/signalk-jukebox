@@ -6,7 +6,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && webpack --config webpack.config.cjs",
     "test": "npm run typecheck:test && vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
@@ -28,6 +28,7 @@
   "keywords": [
     "signalk-node-server-plugin",
     "signalk-webapp",
+    "signalk-plugin-configurator",
     "signalk",
     "signalk-container",
     "music",
@@ -71,6 +72,8 @@
     "react": "^19.0.0",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.58.0",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.10",
+    "webpack": "^5.102.1",
+    "webpack-cli": "^6.0.1"
   }
 }

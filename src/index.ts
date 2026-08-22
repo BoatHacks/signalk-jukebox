@@ -185,6 +185,12 @@ export default function plugin(app: App) {
               title: "Enable AirPlay zones",
             },
             namePattern: { type: "string", default: "{boatName} - {zoneName}" },
+            hostNetworking: {
+              type: "boolean",
+              default: false,
+              title:
+                "Run container with host networking (required for AirPlay discovery -- see the config panel for details)",
+            },
           },
         },
         vhf: {

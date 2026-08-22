@@ -106,6 +106,18 @@ export interface PluginSettings {
   airplay: {
     enabled: boolean;
     namePattern: string;
+    /** Run the container with host networking instead of a bridged/NAT
+     * network (ARCHITECTURE.md §5, §6, confirmed by build-testing).
+     * AirPlay discovery (mDNS) and each per-zone receiver's own
+     * dynamically-chosen RTSP/RTP ports don't traverse a bridge/NAT
+     * boundary to the LAN at all -- there is no fixed port list to
+     * publish individually the way Snapcast's stream port can be, since
+     * each zone's shairport-sync instance is created on demand (§6.4).
+     * Host networking removes that boundary entirely, at the cost of
+     * this container sharing the host's network namespace and port space
+     * with every other process on it -- default off; AirPlay zones won't
+     * be discoverable by real devices until this is enabled. */
+    hostNetworking: boolean;
   };
   vhf: {
     enabled: boolean;
@@ -181,6 +193,7 @@ export const SCHEMA_DEFAULTS: PluginSettings = {
   airplay: {
     enabled: true,
     namePattern: "{boatName} - {zoneName}",
+    hostNetworking: false,
   },
   vhf: {
     enabled: true,
