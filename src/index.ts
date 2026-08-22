@@ -13,6 +13,7 @@ import { registerRoutes, type SnapserverClientState } from "./routes.js";
 import { registerMopidyProxy, type MopidyProxyState } from "./proxy.js";
 import { SnapserverClient } from "./snapserver-client.js";
 import { startZoneSync } from "./zone-sync.js";
+import { createLocalSnapclient } from "./local-snapclient.js";
 import { publishStateChanges, type AppLike } from "./paths.js";
 import { SCHEMA_DEFAULTS, mergeSettings, type PluginSettings } from "./types.js";
 
@@ -32,6 +33,7 @@ interface App extends AppLike {
 
 export default function plugin(app: App) {
   let container: ReturnType<typeof createManagedContainer> | null = null;
+  let localSnapclient: ReturnType<typeof createLocalSnapclient> | null = null;
   let settings: PluginSettings = SCHEMA_DEFAULTS;
   const store = new StateStore(createInitialState());
   let unpublish: (() => void) | null = null;
@@ -101,6 +103,19 @@ export default function plugin(app: App) {
 
         app.setPluginStatus(`Running on port ${MOPIDY_PORT}`);
       });
+
+      // Separate startSafely, not nested inside the one above: a local
+      // snapclient failing to start (e.g. a bad soundCard string) must
+      // surface its own error, not take the whole plugin down with it --
+      // the main jukebox container and every other zone are unaffected
+      // either way (SPEC.md §9, §12).
+      if (settings.localSnapclient.enabled) {
+        localSnapclient = createLocalSnapclient({
+          app,
+          local: settings.localSnapclient,
+        });
+        startSafely(app, () => localSnapclient!.start());
+      }
     },
 
     async stop() {
@@ -111,6 +126,8 @@ export default function plugin(app: App) {
       snapserverState.client = null;
       proxyState.address = null;
       await container?.stop(); // unregister updates + stop, never throws
+      await localSnapclient?.stop();
+      localSnapclient = null;
       app.setPluginStatus("Stopped");
     },
 
@@ -247,6 +264,23 @@ export default function plugin(app: App) {
                 },
               },
             },
+          },
+        },
+        localSnapclient: {
+          type: "object",
+          properties: {
+            enabled: {
+              type: "boolean",
+              default: false,
+              title:
+                "Run a local Snapclient zone on this SignalK server's own sound card",
+            },
+            soundCard: {
+              type: "string",
+              title:
+                'ALSA device (required when enabled, e.g. "plughw:CARD=wm8960soundcard,DEV=0" -- see this host\'s `aplay -L` output)',
+            },
+            tag: { type: "string", default: "auto", title: "Image version" },
           },
         },
       },

@@ -462,6 +462,8 @@ signalk-jukebox/
 │   ├── mopidy-client.ts       # JSON-RPC client: playback state, tracklist snapshot/restore
 │   ├── snapserver-client.ts   # JSON-RPC client: zone list, volume/mute
 │   ├── proxy.ts                # reverse-proxies the plugin's router path to the running container (§2.2)
+│   ├── zone-sync.ts            # polls Snapserver, keeps the canonical store's zones in sync (§2.2)
+│   ├── local-snapclient.ts     # optional 2nd ManagedContainer: a Snapclient zone on this host's own sound card (§12)
 │   ├── n2k/
 │   │   ├── fusion.ts          # Fusion-Link encode/decode + address claiming
 │   │   ├── entertainment-pgn.ts # standard NMEA2000 Entertainment PGN encode/decode
@@ -483,6 +485,9 @@ signalk-jukebox/
 │   ├── snapserver.conf.template
 │   ├── entrypoint.sh
 │   └── webui/                 # minimal built-in Mopidy web UI, substituting for Iris (§2.2, §2.4)
+├── image-snapclient/           # this project's own minimal Snapclient-only image (SPEC.md §9, §12)
+│   ├── Dockerfile
+│   └── entrypoint.sh
 ├── public/                    # signalk-webapp keyword's static mount: a redirect shim to the
 │   └── index.html             # proxied web UI, so the plugin is discoverable in the webapps list/App Dock
 ├── test/

@@ -74,6 +74,11 @@ export default function PluginConfigurationPanel({
     resumeDelaySeconds: 1,
     satelliteZoneMap: [],
   };
+  const localSnapclient = cfg.localSnapclient ?? {
+    enabled: false,
+    soundCard: "",
+    tag: "auto",
+  };
 
   const patch = (next: Partial<PluginSettings>) =>
     setCfg((prev) => ({ ...prev, ...next }));
@@ -414,6 +419,69 @@ export default function PluginConfigurationPanel({
         >
           + Add mapping
         </Button>
+      </CollapsibleSection>
+
+      <CollapsibleSection title="Local snapclient (this SignalK server's own sound card)">
+        <FieldRow label="Enable">
+          <input
+            type="checkbox"
+            style={S.checkbox}
+            checked={localSnapclient.enabled}
+            onChange={(e) =>
+              patch({
+                localSnapclient: {
+                  ...localSnapclient,
+                  enabled: e.target.checked,
+                },
+              })
+            }
+          />
+        </FieldRow>
+        {localSnapclient.enabled && (
+          <>
+            <FieldRow
+              label="ALSA device"
+              hint="required -- see this host's own `aplay -L` output"
+            >
+              <input
+                style={S.input}
+                value={localSnapclient.soundCard}
+                onChange={(e) =>
+                  patch({
+                    localSnapclient: {
+                      ...localSnapclient,
+                      soundCard: e.target.value,
+                    },
+                  })
+                }
+                placeholder="plughw:CARD=wm8960soundcard,DEV=0"
+              />
+            </FieldRow>
+            {localSnapclient.soundCard.trim() === "" && (
+              <div style={S.warnBanner}>
+                An ALSA device is required. A bare "default" device is
+                ambiguous on a host with more than one sound card and fails
+                outright -- run <code>aplay -L</code> on the SignalK server
+                itself and paste the exact device string (e.g.{" "}
+                <code>plughw:CARD=wm8960soundcard,DEV=0</code>).
+              </div>
+            )}
+            <FieldRow label="Image version">
+              <input
+                style={S.input}
+                value={localSnapclient.tag}
+                onChange={(e) =>
+                  patch({
+                    localSnapclient: {
+                      ...localSnapclient,
+                      tag: e.target.value,
+                    },
+                  })
+                }
+              />
+            </FieldRow>
+          </>
+        )}
       </CollapsibleSection>
 
       <ActionStatus message={saved} />

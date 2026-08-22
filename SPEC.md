@@ -649,6 +649,9 @@ all-zone fallback, volume duck, §2):**
 | `voiceDucking.duckVolumePercent`              | `20`                            | Zone volume (0-100) while any voice satellite is active                                                                                                                                  |
 | `voiceDucking.resumeDelaySeconds`             | `1`                             | Delay after a satellite returns to `idle` before restoring its target zones' volume                                                                                                      |
 | `voiceDucking.satelliteZoneMap`               | `[]`                            | Optional array of `{ satelliteId, zoneId }` pairs (§2, §6.5) -- an array of pairs, not a keyed map, confirmed by build-testing: the Admin UI's schema-form library doesn't render a free-form `additionalProperties` map at all, but does render an editable array-of-objects list. Satellites with no entry duck all zones (safe fallback) |
+| `localSnapclient.enabled`                     | `false`                         | Runs a second, optional managed container (`local-snapclient.ts`, §12) -- a Snapclient zone on this SignalK server's own sound card, for speakers wired directly to that machine rather than a separate physical device |
+| `localSnapclient.soundCard`                   | `""`                            | ALSA device string (e.g. `plughw:CARD=wm8960soundcard,DEV=0`); required when enabled, no "auto" fallback -- a bare "default" device is ambiguous on a host with more than one sound card and fails outright (confirmed by build-testing) |
+| `localSnapclient.tag`                         | `"auto"`                        | Image tag for `ghcr.io/boathacks/signalk-jukebox-snapclient`, this project's own minimal Snapclient-only image                                                                          |
 
 ## 10. MVP Scope
 
@@ -990,6 +993,33 @@ all-zone fallback, volume duck, §2):**
   (default off) via the config panel's `hostNetworking` toggle, which
   documents the tradeoff (this container then shares the host's full
   network namespace and port space) directly in its warning banner.
+- **A "local snapclient" companion container (`local-snapclient.ts`,
+  §9) over expecting every zone to be a separate physical device.** Some
+  boats have speakers wired directly to the SignalK server's own
+  machine, not just to standalone Snapclient hardware elsewhere on the
+  boat. Modeled directly on signalk-wyoming's `local-satellite.ts`,
+  which solves the identical "run a companion container alongside the
+  main one, on this same host" problem for its own local microphone/
+  speaker: a second, independent `ManagedContainer` running this
+  project's own minimal `ghcr.io/boathacks/signalk-jukebox-snapclient`
+  image (its own Dockerfile — `image-snapclient/` — rather than a
+  general-purpose third-party Snapclient image, matching this project's
+  existing "build the pieces we actually need" approach to the main
+  image). Reaches the main jukebox container's published Snapcast
+  stream port via `extraHosts: { skhost: "host-gateway" }` — the same
+  mechanism `local-satellite.ts` uses — rather than a literal LAN IP or
+  a shared network namespace: confirmed by hand that both of those were
+  unreliable under this project's actual rootless-Podman (`pasta`) test
+  host, while `host-gateway` is a purpose-built Docker/Podman mechanism
+  for exactly "let this container reach the host" and isn't subject to
+  the same routing quirks. No "auto" ALSA device fallback is offered —
+  confirmed by build-testing (§13) that a bare `default` device is
+  ambiguous and fails outright on a host with more than one sound card,
+  so the operator must supply an explicit device string from their own
+  `aplay -L` output. Once connected, this zone is discovered exactly
+  like any other Snapclient (SPEC.md §2's read-only zone
+  auto-discovery) — no special-cased UI beyond starting/stopping the
+  container and picking its sound card.
 
 ## 13. Open Questions
 

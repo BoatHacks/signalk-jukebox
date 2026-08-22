@@ -142,6 +142,18 @@ export interface PluginSettings {
      * field instead, which does render an editable, add/removable list. */
     satelliteZoneMap: Array<{ satelliteId: string; zoneId: string }>;
   };
+  /** Optional second managed container (local-snapclient.ts, SPEC.md §9,
+   * §12): runs signalk-jukebox's own minimal snapclient image on this
+   * same host, for speakers wired directly to the SignalK server's own
+   * machine rather than a separate physical Snapclient device. */
+  localSnapclient: {
+    enabled: boolean;
+    /** ALSA device string, e.g. "plughw:CARD=wm8960soundcard,DEV=0" --
+     * required when enabled, no "auto" fallback (see
+     * local-snapclient.ts's own doc comment for why). */
+    soundCard: string;
+    tag: string;
+  };
 }
 
 /** Merge a saved/partial config over SCHEMA_DEFAULTS, one level into each
@@ -179,6 +191,10 @@ export function mergeSettings(
         rawConfig.voiceDucking?.satelliteZoneMap ??
         SCHEMA_DEFAULTS.voiceDucking.satelliteZoneMap,
     },
+    localSnapclient: {
+      ...SCHEMA_DEFAULTS.localSnapclient,
+      ...rawConfig.localSnapclient,
+    },
   };
 }
 
@@ -208,5 +224,10 @@ export const SCHEMA_DEFAULTS: PluginSettings = {
     duckVolumePercent: 20,
     resumeDelaySeconds: 1,
     satelliteZoneMap: [],
+  },
+  localSnapclient: {
+    enabled: false,
+    soundCard: "",
+    tag: "auto",
   },
 };
