@@ -5,10 +5,12 @@ import {
 import type { PluginSettings } from "./types.js";
 
 // The custom signalk-jukebox container image (ARCHITECTURE.md §2.4): Mopidy
-// + Iris + Snapserver in one image, built from image/Dockerfile (draft, not
-// build-tested -- see that file's header). Snapserver is pinned >= 0.33.0
-// so the plugin can create/remove per-zone airplay streams at runtime
-// (SPEC.md §6.4, §13) -- no static AirPlay stream pool to configure here.
+// + a minimal built-in web UI + Snapserver in one image, built from
+// image/Dockerfile (build-tested; see that file's header for why Mopidy-Iris
+// isn't used -- incompatible with the Mopidy 4.x this image needs). Snapserver
+// is pinned >= 0.33.0 so the plugin can create/remove per-zone airplay
+// streams at runtime (SPEC.md §6.4, §13) -- no static AirPlay stream pool to
+// configure here.
 //
 // TODO(image): not yet published -- this points at a placeholder registry
 // path until the image is built and pushed per ARCHITECTURE.md §8.
@@ -40,10 +42,11 @@ export function createManagedContainer({
     buildConfig: (tag) => ({
       image: JUKEBOX_IMAGE,
       tag,
-      // Mopidy HTTP/JSON-RPC + Iris web client, reverse-proxied by the
-      // plugin (ARCHITECTURE.md §2.2); Snapcast stream/control ports are
-      // not exposed to signalkAccessiblePorts -- they're LAN-facing, not
-      // routed through the SK server (SPEC.md §6, security note).
+      // Mopidy HTTP/JSON-RPC + the minimal built-in web UI (image/webui),
+      // reverse-proxied by the plugin (ARCHITECTURE.md §2.2); Snapcast
+      // stream/control ports are not exposed to signalkAccessiblePorts --
+      // they're LAN-facing, not routed through the SK server (SPEC.md §6,
+      // security note).
       signalkAccessiblePorts: [MOPIDY_PORT],
       env: {
         JUKEBOX_LOCAL_ENABLED: String(settings.backends.local.enabled),

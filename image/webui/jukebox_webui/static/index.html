@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Jukebox</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #12161c;
+    --panel: #1b212a;
+    --text: #e8ecf1;
+    --muted: #8b95a3;
+    --accent: #4da3ff;
+    --border: #2a323d;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    justify-content: center;
+    padding: 2rem 1rem;
+  }
+  main { width: 100%; max-width: 480px; }
+  h1 { font-size: 1.1rem; font-weight: 600; color: var(--muted); margin: 0 0 1.25rem; letter-spacing: 0.04em; text-transform: uppercase; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem;
+    margin-bottom: 1rem;
+  }
+  .now-playing .track { font-size: 1.15rem; font-weight: 600; margin-bottom: 0.15rem; }
+  .now-playing .artist { color: var(--muted); font-size: 0.95rem; }
+  .now-playing .state { color: var(--muted); font-size: 0.8rem; margin-top: 0.5rem; text-transform: capitalize; }
+  .transport { display: flex; align-items: center; justify-content: center; gap: 1.5rem; margin: 1rem 0; }
+  .transport button {
+    background: none; border: none; color: var(--text); cursor: pointer;
+    font-size: 1.4rem; width: 3rem; height: 3rem; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .transport button:hover { background: var(--border); }
+  .transport button.play-pause { font-size: 1.8rem; background: var(--accent); color: #0a0a0a; }
+  .transport button.play-pause:hover { opacity: 0.9; background: var(--accent); }
+  .volume-row { display: flex; align-items: center; gap: 0.75rem; }
+  .volume-row input[type="range"] { flex: 1; accent-color: var(--accent); }
+  label { display: block; font-size: 0.8rem; color: var(--muted); margin-bottom: 0.4rem; }
+  .play-uri { display: flex; gap: 0.5rem; }
+  .play-uri input {
+    flex: 1; background: var(--bg); border: 1px solid var(--border); color: var(--text);
+    border-radius: 8px; padding: 0.5rem 0.7rem; font-size: 0.9rem;
+  }
+  .play-uri button {
+    background: var(--accent); border: none; color: #0a0a0a; border-radius: 8px;
+    padding: 0.5rem 1rem; font-weight: 600; cursor: pointer;
+  }
+  .hint { font-size: 0.75rem; color: var(--muted); margin-top: 0.5rem; }
+  .status-dot { display: inline-block; width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--muted); margin-right: 0.4rem; }
+  .status-dot.ok { background: #4caf50; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Jukebox</h1>
+
+  <section class="panel now-playing">
+    <div class="track" id="track">Nothing playing</div>
+    <div class="artist" id="artist"></div>
+    <div class="state"><span class="status-dot" id="statusDot"></span><span id="state">unknown</span></div>
+  </section>
+
+  <section class="panel">
+    <div class="transport">
+      <button id="prevBtn" title="Previous">⏮</button>
+      <button id="playPauseBtn" class="play-pause" title="Play/Pause">▶</button>
+      <button id="nextBtn" title="Next">⏭</button>
+    </div>
+    <label for="volume">Volume</label>
+    <div class="volume-row">
+      <input type="range" id="volume" min="0" max="100" value="0">
+      <span id="volumeValue">0%</span>
+    </div>
+  </section>
+
+  <section class="panel">
+    <label for="uriInput">Play a URI (stream URL, spotify:track:..., etc.)</label>
+    <div class="play-uri">
+      <input type="text" id="uriInput" placeholder="https://... or spotify:track:...">
+      <button id="playUriBtn">Play</button>
+    </div>
+    <div class="hint">
+      Replaces track-directory extensions this minimal UI doesn't have (e.g. TuneIn)
+      &mdash; any playable stream URL or backend URI works directly.
+    </div>
+  </section>
+</main>
+<script src="app.js"></script>
+</body>
+</html>

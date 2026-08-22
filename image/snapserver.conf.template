@@ -1,6 +1,5 @@
 # snapserver.conf template (ARCHITECTURE.md §2.4, §7). Rendered by
-# entrypoint.sh via envsubst -- NOT verified against a real Snapserver
-# build (no container runtime available when this was written).
+# entrypoint.sh via envsubst. Build-tested against Snapserver 0.35.0.
 #
 # No per-zone AirPlay streams are declared here (SPEC.md §6.4, §13):
 # those are created/removed at runtime via Stream.AddStream/RemoveStream
@@ -23,14 +22,24 @@ source = pipe:///tmp/snapfifo?name=Jukebox&sampleformat=48000:16:2
 sandbox_dir = /app/sandbox
 
 [http]
+# Control API (src/snapserver-client.ts talks JSON-RPC over HTTP here, not
+# the legacy TCP JSON-RPC protocol below).
 enabled = true
 bind_to_address = 0.0.0.0
 port = 1705
 
-[tcp]
-enabled = true
-bind_to_address = 0.0.0.0
-port = 1704
+# The legacy TCP JSON-RPC control protocol ([tcp]/[tcp-control], both names
+# accepted) is disabled -- src/snapserver-client.ts only speaks HTTP, and
+# its default port (1705) collides with [http] above if left enabled.
+[tcp-control]
+enabled = false
+
+# tcp-streaming (real audio delivery to snapclients, port 1704) is left at
+# its default -- confirmed via `snapserver -hh` that it's a distinct,
+# always-on listener unrelated to the control protocols above. Build-
+# testing caught this: an earlier draft of this file set the deprecated
+# [tcp] section's port to 1704, which collided with tcp-streaming's own
+# default 1704 listener and made Snapserver fail to bind at startup.
 
 # Deliberately NOT exposed via signalkAccessiblePorts (src/container.ts,
 # SPEC.md §6 security note) -- these ports are LAN-facing via

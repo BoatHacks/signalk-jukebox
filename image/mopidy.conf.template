@@ -25,8 +25,29 @@ output = audioresample ! audioconvert ! audio/x-raw,rate=48000,channels=2,format
 enabled = ${JUKEBOX_LOCAL_ENABLED}
 media_dir = /music
 
-[tunein]
-enabled = ${JUKEBOX_RADIO_ENABLED}
+[m3u]
+# Mopidy's built-in m3u extension defaults base_dir to the literal string
+# $XDG_MUSIC_DIR -- confirmed by build-testing that Mopidy 4.x's path
+# expansion only resolves XDG_CACHE_DIR/XDG_CONFIG_DIR/XDG_DATA_DIR (from
+# the XDG base directory spec), not XDG_MUSIC_DIR (an xdg-user-dirs
+# concept, unrelated), so the default is permanently unexpandable and
+# must be overridden here instead of via an env var.
+base_dir = /music
+
+[file]
+# Mopidy's built-in file extension has the same $XDG_MUSIC_DIR problem in
+# its default media_dirs (confirmed by build-testing) -- override for the
+# same reason as [m3u] above.
+media_dirs =
+    /music|Music
+
+# No [tunein]: dropped from the image (see Dockerfile's base-image note --
+# incompatible with Mopidy 4.x, tracked upstream, no fix yet). Mopidy's
+# built-in [stream] extension (enabled by default, no config needed here)
+# still plays any http(s) audio URL directly -- JUKEBOX_RADIO_ENABLED is
+# passed into this container's env by src/container.ts but currently has
+# nothing to bind to; re-add a [tunein] block here if it ever regains
+# Mopidy-4 compatibility upstream.
 
 [spotify]
 enabled = ${JUKEBOX_SPOTIFY_ENABLED}
@@ -37,5 +58,8 @@ client_secret = ${JUKEBOX_SPOTIFY_CLIENT_SECRET}
 # work even with correct client_id/client_secret. Not something this
 # config can work around.
 
-[iris]
+[jukebox]
+# Minimal built-in web UI (./webui) -- replaces Mopidy-Iris until it
+# publishes a Mopidy-4-compatible release (see Dockerfile's base-image
+# note). Served at /jukebox/ on this same Mopidy HTTP port.
 enabled = true
