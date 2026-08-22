@@ -13,7 +13,7 @@ import {
   useStatusPoll,
   useVersions,
 } from "signalk-container-helper/ui";
-import type { PluginSettings } from "../types.js";
+import { mergeSettings, type PluginSettings } from "../types.js";
 
 // Custom config panel (ARCHITECTURE.md §7, signalk-container-helper's own
 // documented Module Federation pattern) -- replaces the auto-generated
@@ -50,33 +50,19 @@ export default function PluginConfigurationPanel({
   const reachable = status !== null;
   const trackName = status?.track?.name;
 
-  const backends = cfg.backends ?? {
-    local: { enabled: true },
-    radio: { enabled: false },
-    spotify: { enabled: false },
-  };
-  const n2k = cfg.n2k ?? {
-    enabled: false,
-    deviceName: "Jukebox",
-    deviceInstance: 0,
-  };
-  const airplay = cfg.airplay ?? {
-    enabled: true,
-    namePattern: "{boatName} - {zoneName}",
-    hostNetworking: false,
-  };
-  const vhf = cfg.vhf ?? { enabled: true, resumeDelaySeconds: 5 };
-  const voiceDucking = cfg.voiceDucking ?? {
-    enabled: true,
-    duckVolumePercent: 20,
-    resumeDelaySeconds: 1,
-    satelliteZoneMap: [],
-  };
-  const localSnapclient = cfg.localSnapclient ?? {
-    enabled: false,
-    soundCard: "",
-    tag: "auto",
-  };
+  // mergeSettings deep-merges each nested group against SCHEMA_DEFAULTS --
+  // the same function index.ts uses server-side. Required here too, not
+  // just a shallow `cfg.backends ?? {...defaults}`: a saved config can be
+  // *partially* populated (e.g. backends.local set from an older save,
+  // backends.spotify never written at all), and a shallow per-group `??`
+  // only guards a group being entirely absent, not one of its own
+  // nested fields -- confirmed by a real crash report ("Cannot read
+  // properties of undefined (reading 'enabled')") reading
+  // backends.spotify.enabled when backends existed but backends.spotify
+  // didn't.
+  const merged = mergeSettings(cfg);
+  const { backends, n2k, airplay, vhf, voiceDucking, localSnapclient } =
+    merged;
 
   const patch = (next: Partial<PluginSettings>) =>
     setCfg((prev) => ({ ...prev, ...next }));
@@ -508,7 +494,12 @@ export default function PluginConfigurationPanel({
       <div style={{ marginTop: 24 }}>
         <Button
           onClick={() => {
-            save(cfg as PluginSettings);
+            // Save the fully-merged object, not the raw (possibly
+            // partial) `cfg` -- otherwise a save that never touched some
+            // group perpetuates the same partial-config shape that
+            // caused the crash this component's `merged` is guarding
+            // against, just for the next person who opens this panel.
+            save(merged);
             setSaved("Saved! Plugin will restart with new configuration.");
           }}
         >
