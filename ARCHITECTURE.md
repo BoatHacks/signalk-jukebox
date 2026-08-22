@@ -135,6 +135,11 @@ other directly) when a command arrives on its interface.
   watches for a zone's group switching which stream it's attached to
   (Jukebox ↔ that zone's claimed AirPlay slot) and writes the resulting
   `activeSource` into canonical state (§2.1).
+- **Tails each claimed slot's `shairport-sync` metadata pipe** (SPEC.md
+  §6.4) and writes parsed title/artist/album into that zone's
+  `Zone.airplay.track` (§2.1) as it arrives — feeds both the zone-level
+  SK path and, for N2K-zoned zones, the N2K/Fusion adapter's broadcast
+  (§2.3, SPEC.md §6.3).
 - Serves the Admin config panel (via `signalk-container-helper/ui`
   building blocks) for backend toggles, library path, Spotify
   credentials, zone controls, N2K/Fusion settings, AirPlay toggle, and
@@ -164,7 +169,12 @@ other directly) when a command arrives on its interface.
   `app.emit('nmea2000out', pgnString)`, per SignalK's standard
   N2K-output convention. Also re-broadcasts current state on a periodic
   interval so a device joining the bus mid-session gets it without
-  waiting for the next change (SPEC.md §6.3).
+  waiting for the next change (SPEC.md §6.3). **Now-playing source
+  selection** (device-wide field, SPEC.md §6.3, §12): Mopidy's track,
+  unless an N2K-zoned zone's `activeSource` is `airplay`, in which case
+  that zone's `Zone.airplay.track` if present (else the "AirPlay Active"
+  placeholder) — and if more than one N2K-zoned zone is on AirPlay
+  simultaneously, the lowest `n2kZone` number's track wins.
 - **Inbound:** subscribes to incoming N2K PGNs via SignalK's PGN-in hook,
   decodes Fusion-Link commands (transport, master volume, per-zone
   volume/mute), and writes them into the canonical store the same way any
@@ -381,7 +391,8 @@ signalk-jukebox/
 │   │   └── zone-mapping.ts    # Snapclient id <-> n2kZone persistence (§2.1)
 │   ├── airplay/
 │   │   ├── pool.ts             # static N-slot stream config generation + Snapserver restart-on-claim (§2.2, §6.4)
-│   │   └── zone-binding.ts     # dynamic Group.SetClients/SetStream bind/unbind, no restart (§2.2, §6.4)
+│   │   ├── zone-binding.ts     # dynamic Group.SetClients/SetStream bind/unbind, no restart (§2.2, §6.4)
+│   │   └── metadata.ts         # tails each slot's shairport-sync metadata pipe, parses DAAP tags into Zone.airplay.track (§2.2, SPEC.md §6.4)
 │   ├── duck-triggers/
 │   │   ├── vhf.ts              # communication.vhf.busy -> Mopidy pause/resume (§2.5, SPEC.md §6.5)
 │   │   └── voice.ts            # voice.satellites.*.state -> zone volume duck/restore (§2.5, SPEC.md §6.5)
@@ -486,8 +497,3 @@ signalk-jukebox/
   feature request against those plugins (or a different radio
   integration) before this plugin could react to it — not something to
   build speculatively here.
-- **AirPlay now-playing metadata surfaced further** (SPEC.md §13) — if
-  the "stale info during someone else's AirPlay session" gap proves
-  annoying, `shairport-sync`'s metadata pipe could feed track/artist into
-  canonical state per zone the same way Mopidy's does today, extending
-  `Zone.airplay` (SPEC.md §4) rather than replacing it.

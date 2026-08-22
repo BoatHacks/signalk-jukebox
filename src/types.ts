@@ -26,11 +26,23 @@ export interface PlaybackState {
 
 export type ZoneActiveSource = "jukebox" | "airplay";
 
+export interface AirPlayTrack {
+  title: string;
+  artist?: string;
+  album?: string;
+}
+
 export interface ZoneAirPlayInfo {
   /** The mDNS name this zone's claimed slot advertises, once claimed. */
   streamName: string;
   /** Whether a device currently has an active AirPlay session to it. */
   connected: boolean;
+  /** From shairport-sync's metadata pipe (SPEC.md §6.3, §6.4). Absent
+   * until the sending device/app pushes metadata -- not every AirPlay
+   * source does, and it can lag session start -- so absence means
+   * "nothing received yet," not "definitely nothing," and callers fall
+   * back to a placeholder rather than treating it as an error. */
+  track?: AirPlayTrack;
 }
 
 export interface Zone {

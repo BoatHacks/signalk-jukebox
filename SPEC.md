@@ -297,14 +297,18 @@ copy.
   (§3.2). `volume`/`muted` here are the _master_ volume (pre-zone), used
   for Fusion-Link's own volume model (§6.3); per-zone volume is separate
   (`Zone.volume` below).
-- **Zone** — `{ id, name, connected: boolean, volume: number (0-100), muted: boolean, n2kZone?: number, activeSource: 'jukebox'|'airplay', airplay?: { streamName, connected: boolean } }`
+- **Zone** — `{ id, name, connected: boolean, volume: number (0-100), muted: boolean, n2kZone?: number, activeSource: 'jukebox'|'airplay', airplay?: { streamName, connected: boolean, track?: { title, artist?, album? } } }`
   — `id` is the Snapclient's Snapcast-assigned id; `name` is whatever the
   Snapclient reports (typically its hostname) unless overridden. `n2kZone`
   (0–3) is present only for zones assigned an N2K/Fusion slot (§2, §8);
   absent for zones beyond the protocol's zone count. `airplay.streamName`
   is the mDNS name that zone's receiver advertises (e.g. "Jukebox -
   Cockpit", §9); `airplay.connected` reflects whether a device currently
-  has an active AirPlay session to it.
+  has an active AirPlay session to it; `airplay.track` is real
+  title/artist/album read from that zone's `shairport-sync` **metadata
+  pipe** (§6.4) — absent until the sending device/app pushes metadata
+  (not universal — depends on the AirPlay source — and can lag session
+  start), not an error condition.
 - **QueueSnapshot** (plugin-managed persistence, see §8) — the serialized
   Mopidy tracklist + current track index + position, snapshotted
   periodically and on clean `stop()`, restored on the next container
@@ -389,15 +393,16 @@ there to Mopidy/Snapserver) exactly like a REST call or a Fusion-Link
 command would; deltas are published on every canonical-state change
 regardless of which interface caused it:
 
-| Path                                         | Value                            | Notes                             |
-| -------------------------------------------- | -------------------------------- | --------------------------------- |
-| `entertainment.jukebox.playback.state`       | `'stopped'\|'playing'\|'paused'` |                                   |
-| `entertainment.jukebox.playback.track`       | `{ name, artist?, album? }`      | Present only while playing/paused |
-| `entertainment.jukebox.playback.volume`      | `number` (0-100), PUT-able       | Master volume (§4)                |
-| `entertainment.jukebox.zones.<id>.connected` | `boolean`                        |                                   |
-| `entertainment.jukebox.zones.<id>.volume`    | `number` (0-100), PUT-able       |                                   |
-| `entertainment.jukebox.zones.<id>.muted`     | `boolean`, PUT-able              |                                   |
-| `entertainment.jukebox.zones.<id>.n2kZone`   | `number` (0-3), read-only        | Present only if assigned (§2)     |
+| Path                                             | Value                                   | Notes                                                                              |
+| ------------------------------------------------ | --------------------------------------- | ---------------------------------------------------------------------------------- |
+| `entertainment.jukebox.playback.state`           | `'stopped'\|'playing'\|'paused'`        |                                                                                    |
+| `entertainment.jukebox.playback.track`           | `{ name, artist?, album? }`             | Present only while playing/paused                                                  |
+| `entertainment.jukebox.playback.volume`          | `number` (0-100), PUT-able              | Master volume (§4)                                                                 |
+| `entertainment.jukebox.zones.<id>.connected`     | `boolean`                               |                                                                                    |
+| `entertainment.jukebox.zones.<id>.volume`        | `number` (0-100), PUT-able              |                                                                                    |
+| `entertainment.jukebox.zones.<id>.muted`         | `boolean`, PUT-able                     |                                                                                    |
+| `entertainment.jukebox.zones.<id>.n2kZone`       | `number` (0-3), read-only               | Present only if assigned (§2)                                                      |
+| `entertainment.jukebox.zones.<id>.airplay.track` | `{ title, artist?, album? }`, read-only | Present only while `activeSource` is `airplay` and metadata has arrived (§4, §6.4) |
 
 These exist so other plugins/instruments can show "now playing" or react
 to it; there is no other consumer identified yet (§13).
@@ -450,20 +455,25 @@ Fusion-Link's genuinely per-zone volume fields (`fusionSetZoneVolume` /
 `fusionVolumes`' `zone1`–`zone4`, confirmed via `@canboat/ts-pgns`, §13
 — this is also the protocol-level confirmation that Fusion-Link caps at
 exactly 4 zones, validating the `n2kZone` 0–3 range used throughout this
-doc). Track/now-playing metadata is Mopidy-specific and has no AirPlay
-equivalent to show — rather than broadcast stale or wrong Mopidy track
-data while a zone is actually playing someone's AirPlay session, **if
-any N2K-zoned zone's `activeSource` is `airplay`, the broadcast
-now-playing field is replaced with a fixed placeholder ("AirPlay
-Active") instead of real track info** (§12). This doesn't say _which_
-zone — **confirmed via research, not assumed (§13): Fusion-Link's
-now-playing/source fields (`fusionSetSource`, `fusionTrackName`,
-`fusionArtistName`, `fusionAlbumName`) are all keyed by `sourceId`, never
-by zone — there is no `fusionSetZoneSource` or per-zone track message
-anywhere in the protocol, matching real Fusion hardware's own
-architecture (one source distributed to zones with independent
-volume/EQ, not independent per-zone source selection)** — but the
-placeholder still avoids showing information that's flatly false.
+doc). Track/now-playing is a single device-wide field — **confirmed via
+research, not assumed (§13): Fusion-Link's now-playing/source fields
+(`fusionSetSource`, `fusionTrackName`, `fusionArtistName`,
+`fusionAlbumName`) are all keyed by `sourceId`, never by zone — there is
+no `fusionSetZoneSource` or per-zone track message anywhere in the
+protocol, matching real Fusion hardware's own architecture (one source
+distributed to zones with independent volume/EQ, not independent
+per-zone source selection)** — so broadcasting Mopidy's track while a
+zone is actually playing someone's AirPlay session would show something
+flatly false. The fix: **if any N2K-zoned zone's `activeSource` is
+`airplay`, broadcast _that zone's_ real `airplay.track` (§4, §6.4) if
+metadata has arrived, falling back to a fixed placeholder ("AirPlay
+Active") only if it hasn't** — real data beats a fake string whenever
+it's available, which is the common case (most AirPlay sources push
+metadata within a second or two of starting). **Tie-break when more than
+one N2K-zoned zone is on AirPlay simultaneously** (device-wide field,
+one value only): the **lowest `n2kZone` number's** track wins (§12) —
+deterministic, and consistent with treating zone numbering as the stable
+identity it already is elsewhere in this doc.
 
 **Bus-identity caveat (confirmed via research, §13):** the plugin
 broadcasts Fusion PGNs under the SignalK server's own already-claimed
@@ -517,6 +527,16 @@ boat-wide toggle and pool size in §9.
   name (e.g. duplicate zone names), the plugin must disambiguate (e.g.
   append the Snapclient id) rather than silently advertise two identical
   AirPlay targets — exact scheme TBD at implementation time.
+- **Metadata pipe (every slot, regardless of the pool-vs-dynamic decision
+  in §13):** each slot's `shairport-sync` is launched with
+  `--metadata-enable` pointed at a per-slot named pipe. The plugin tails
+  that pipe, parses `shairport-sync`'s documented DAAP-tagged metadata
+  format, and writes `title`/`artist`/`album` into that zone's
+  `Zone.airplay.track` (§4) as they arrive — feeding both the zone-level
+  SK path (§6.2) and, for N2K-zoned zones, the Fusion-Link broadcast
+  (§6.3). Not every AirPlay source sends metadata, and it can lag session
+  start by a second or two; both cases just mean `track` stays absent
+  until (or unless) something arrives, not an error.
 
 ### 6.5 Duck Triggers
 
@@ -858,17 +878,24 @@ all-zone fallback, volume duck, §2):**
   silently overridden the moment the call ended, which is a much worse
   surprise than the feature's entire point (not interrupting the user
   unexpectedly).
-- **A fixed "AirPlay Active" placeholder over surfacing per-zone AirPlay
-  state to Fusion-Link properly** — not a workaround pending a better
-  idea, but the only option: Fusion's now-playing concept is confirmed
-  (not assumed, §13) to be one value for the whole device, so there is no
-  protocol-level way to say "zone 2 is on AirPlay, zone 1 isn't," full
-  stop, on any implementation. A placeholder is strictly better than
-  leaving stale/wrong Mopidy track data displayed, at near-zero
-  implementation cost, so it's in MVP rather
-  than deferred — unlike the harder, genuinely-unresolved problems (a
-  per-zone Fusion source model doesn't exist to build against) that stay
-  open.
+- **Real AirPlay track metadata (via shairport-sync's metadata pipe) over
+  a permanent placeholder** — the earlier "no AirPlay equivalent to show"
+  framing was simply wrong: `shairport-sync` already parses and emits
+  DAAP-tagged title/artist/album from the sending device, we just weren't
+  using it. The device-wide Fusion now-playing constraint (confirmed,
+  §13) doesn't go away — there's still no way to show two zones' tracks
+  at once — but within that constraint, showing the _real_ track of
+  whichever N2K-zoned zone is on AirPlay is strictly better than a fake
+  string, so the placeholder is now a fallback (metadata not yet
+  arrived), not the primary behavior.
+- **Lowest-`n2kZone`-wins tie-break for simultaneous multi-zone AirPlay**
+  — chosen over "most recent session wins" because it's deterministic
+  and doesn't flap: with a recency rule, the single device-wide broadcast
+  would jump between two zones' tracks every time either session
+  starts/stops, which reads as broken to anyone watching the MFD. A fixed
+  zone priority is predictable, even if "always zone 0" isn't perfectly
+  fair to zone 1's listener.
+- **Leaving a disconnected zone's AirPlay slot running rather than
 - **Leaving a disconnected zone's AirPlay slot running rather than
   tearing it down** — the alternative (restart to remove it, then
   restart again if the zone reconnects) would mean _every_ zone
@@ -878,6 +905,13 @@ all-zone fallback, volume duck, §2):**
 
 ## 13. Open Questions
 
+- **shairport-sync metadata pipe: exact parsing approach not chosen.**
+  The pipe emits DAAP-tagged binary chunks (a documented but not
+  trivially-JSON format — `shairport-sync`'s own docs and reference
+  scripts like `shairport-sync-metadata-reader` describe the tag
+  structure); whether to hand-roll a small parser or find/adapt an
+  existing Node one is an implementation detail to settle when §6.4 is
+  built, not a design question. Doesn't block the design in §4/§6.3/§6.4.
 - **wyoming-satellite as a zone type.** Satellites are ALSA
   speaker/mic devices already deployed on some boats for voice, not
   Snapclients. A future zone backend could target a satellite's control
