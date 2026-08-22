@@ -1,0 +1,41 @@
+# mopidy.conf template (ARCHITECTURE.md §2.4, §7). Rendered by
+# entrypoint.sh via envsubst against the JUKEBOX_* env vars set in
+# src/container.ts's buildConfig(). NOT verified against a real Mopidy
+# build (no container runtime available when this was written).
+
+[core]
+data_dir = /data
+cache_dir = /cache
+
+[http]
+enabled = true
+hostname = 0.0.0.0
+port = 6680
+
+[audio]
+# Routes Mopidy's output into the FIFO Snapserver reads as its Jukebox
+# stream source (snapserver.conf.template). TODO(verify): confirm this
+# GStreamer pipeline syntax and sample format actually match what
+# snapserver.conf.template's `sampleformat=48000:16:2` expects, and that
+# `sync=false` is the right choice for a pipe sink (avoids the filesink
+# blocking on a reader that isn't Snapserver yet).
+output = audioresample ! audioconvert ! audio/x-raw,rate=48000,channels=2,format=S16LE ! filesink location=/tmp/snapfifo sync=false
+
+[local]
+enabled = ${JUKEBOX_LOCAL_ENABLED}
+media_dir = /music
+
+[tunein]
+enabled = ${JUKEBOX_RADIO_ENABLED}
+
+[spotify]
+enabled = ${JUKEBOX_SPOTIFY_ENABLED}
+client_id = ${JUKEBOX_SPOTIFY_CLIENT_ID}
+client_secret = ${JUKEBOX_SPOTIFY_CLIENT_SECRET}
+# TODO(SPEC.md §5, §13): Mopidy-Spotify has an open upstream login5 auth
+# issue as of this writing (mopidy-spotify#437) -- basic playback may not
+# work even with correct client_id/client_secret. Not something this
+# config can work around.
+
+[iris]
+enabled = true

@@ -16,7 +16,7 @@ already use for navigation and boat systems — no separate phone app, no
 dedicated media PC. It runs a containerized [Mopidy](https://mopidy.com/)
 music server (local files + optional streaming backends), and distributes
 audio to speaker zones around the boat (cockpit, salon, cabin) via
-[Snapcast](https://github.com/badaix/snapcast), with synchronized playback
+[Snapcast](https://github.com/snapcast/snapcast), with synchronized playback
 and independent per-zone volume/mute.
 
 Crew and guests must also be able to play audio straight from their own
@@ -92,13 +92,11 @@ Questions).
 - **Canonical state** — the single in-plugin source of truth for playback
   and zone state that every interface (Mopidy, N2K/Fusion, REST, SK paths)
   reads from and writes to (§3, §12).
-- **AirPlay slot** — one of a fixed pool of `N` (configurable,
-  `airplay.maxZones`, §9) statically-configured Snapcast `airplay`-type
-  streams, provisioned at container start. A zone claims a slot the
-  first time it's ever seen (persisted assignment, like `n2kZone`, §2,
-  §4), and is bound/unbound from it dynamically on every connect/
-  disconnect thereafter — see §6.4 for why streams are pooled rather
-  than created per zone on demand.
+- **AirPlay receiver** — a Snapcast `airplay`-type stream created
+  on-demand for one zone the moment it connects, and removed the moment
+  it disconnects (§2, §6.4). No pool, no slot numbering, no persisted
+  assignment — unlike `n2kZone` (below), a zone's AirPlay receiver has no
+  identity that needs to survive across connects.
 - **Active source** — which audio feed (the Jukebox/Mopidy stream, or
   that zone's own AirPlay receiver) a given zone's Snapclient group is
   currently attached to. Distinct from _master_ playback state, which
@@ -208,20 +206,16 @@ Questions).
   satellites union their target zone sets. Configuring the mapping is
   optional and manual (§13) — there's no auto-detection of which
   Snapclient physically sits with which satellite.
-- **Every zone gets its own AirPlay receiver, drawn from a fixed pool of
-  pre-provisioned slots (§6.4).** Snapcast's control API cannot create
-  `airplay`-type streams at runtime (deliberately blocked as a security
-  fix, §13) — so `N` (configurable, §9) AirPlay streams are statically
-  configured at container start, and a zone claims one slot the first
-  time it's ever seen, persisted thereafter (like `n2kZone`, §4). Binding
-  and unbinding a zone's Snapclient to its claimed slot on every connect/
-  disconnect is fully dynamic (no restart); only a **brand-new** zone
-  (never seen before) triggers a one-time config regeneration + restart
-  so its slot's `shairport-sync` advertises the zone's real name. This is
-  per-zone, not boat-wide — someone can AirPlay to the cockpit
-  specifically while the salon keeps playing the Mopidy queue. A zone
-  beyond the pool size (`airplay.maxZones`, §9) gets no AirPlay slot,
-  same as a zone beyond the N2K zone cap gets no `n2kZone`.
+- **Every zone gets its own AirPlay receiver, created the moment it
+  connects and removed the moment it disconnects (§6.4).** Confirmed via
+  research (§13) that Snapcast ≥ 0.33.0's control API can both create and
+  cleanly remove `airplay`-type streams at runtime — the earlier belief
+  that this was blocked was version-specific, not a permanent Snapcast
+  property, and this plugin pins its own Snapserver version so requiring
+  ≥ 0.33.0 costs nothing. No pool, no cap, no persisted slot assignment:
+  a zone's receiver is created with the zone's real name from the start.
+  This is per-zone, not boat-wide — someone can AirPlay to the cockpit
+  specifically while the salon keeps playing the Mopidy queue.
 - **An active AirPlay session on a zone takes over that zone's audio,
   replacing whatever the Jukebox source was sending it**, for as long as
   the session is connected; when it ends, the zone reverts to whatever
@@ -279,10 +273,8 @@ the canonical state store (§4, ARCHITECTURE.md §2), and any adapter
   connecting is the switch. Snapserver reports which stream a group is
   attached to, so the plugin's Snapserver adapter can detect the
   transition and reflect it into canonical state (and, if the N2K/Fusion
-  interface is enabled, broadcast it — see §13 for whether that should
-  even happen given the "one virtual Fusion source" decision in §12). A
-  zone without a claimed slot (beyond the pool size, §9) has no AirPlay
-  path at all and stays on `jukebox`.
+  interface is enabled and the zone has an `n2kZone`, broadcast it per
+  §6.3's now-playing selection logic).
 
 ## 4. Data Model
 
@@ -314,10 +306,12 @@ copy.
   periodically and on clean `stop()`, restored on the next container
   start.
 - **ZoneAssignment** (plugin-managed persistence, see §8) — the persisted
-  Snapclient-id → `{ n2kZone?: number, airplaySlot?: number }` mapping
-  (§2), independent of whether that Snapclient is currently connected.
-  Both numbers are assigned once, the first time a Snapclient is seen,
-  and never reassigned automatically thereafter.
+  Snapclient-id → `{ n2kZone?: number }` mapping (§2), independent of
+  whether that Snapclient is currently connected. Assigned once, the
+  first time a Snapclient is seen, and never reassigned automatically
+  thereafter. (AirPlay no longer needs an entry here — §6.4, §12 — since
+  a zone's AirPlay receiver is created/removed on demand rather than
+  claiming a persisted slot.)
 - **DuckState** (plugin-internal, not persisted — §8) — `{ pausedByVhf: boolean, activeDucksBySatellite: Record<satelliteId, zoneId[]>, preDuckZoneVolumes: Record<zoneId, number> }`.
   `pausedByVhf` is what makes the VHF auto-resume rule (§2) not fight a
   manual pause; `activeDucksBySatellite` tracks which satellite(s) are
@@ -486,50 +480,51 @@ and a real risk to the whole feature**, not a cosmetic gap — see §13.
 
 ### 6.4 AirPlay Zone Receivers
 
-**Confirmed via research (§13): Snapcast's control API cannot create
-`airplay`-type streams at runtime** — this was deliberately removed as
-part of a security fix (CVE-2023-36177, arbitrary command execution via
-the stream-add RPC) and only non-process stream types were reinstated.
-So MVP uses a **pre-provisioned pool**, not per-zone dynamic stream
-creation, managed entirely by the Mopidy/Snapserver adapter
-(ARCHITECTURE.md §2.2) — no separate REST surface; this is
-infrastructure, not something a user configures per-zone beyond the
-boat-wide toggle and pool size in §9.
+**True per-zone dynamic streams — confirmed viable via research (§13),
+after an earlier pre-provisioned-pool design was built around a
+restriction that turned out to be version-specific and no longer
+current.** Snapcast v0.33.0+ (PR #1444, "Sandbox") allows `Stream.
+AddStream`/`RemoveStream` to create and cleanly remove `process`-type
+streams (which `airplay` is, internally) via the control API, gated by a
+`stream.sandbox_dir` executable-path containment check rather than the
+earlier v0.31.0–v0.32.x type whitelist. `RemoveStream` was independently
+confirmed to SIGINT the whole process group (killing `shairport-sync`
+and its children, not orphaning them) and cleanly unassign — not
+error — any client left on the removed stream. Since this plugin builds
+and pins its own Snapserver version (ARCHITECTURE.md §2.4), there is no
+compatibility burden in requiring ≥ 0.33.0. Managed entirely by the
+Mopidy/Snapserver adapter (ARCHITECTURE.md §2.2) — no separate REST
+surface; this is infrastructure, not something a user configures
+per-zone beyond the boat-wide toggle in §9.
 
-- **Pool provisioning:** at container start, `airplay.maxZones` (§9)
-  Snapcast `airplay`-type streams are statically configured, each
-  spawning its own `shairport-sync` instance. Slots for zones not yet
-  claimed use a placeholder name (e.g. "Jukebox AirPlay (unassigned)").
-- **Slot claim (first time a zone is ever seen):** the plugin assigns
-  the next free slot to that Snapclient id, persists the assignment
-  (`ZoneAssignment.airplaySlot`, §4, §8), regenerates Snapserver's config
-  with that slot's `shairport-sync` renamed per §9's naming pattern, and
-  restarts Snapserver once to apply it — a brief, boat-wide audio
-  interruption, accepted as the cost of a real per-zone name (chosen over
-  the generic-numbered-slots alternative, §12). This happens **once per
-  zone, ever** — not on every connect.
-- **Bind/unbind (every connect/disconnect thereafter):** the zone's
-  Snapclient is attached to or detached from its already-claimed,
-  already-named slot's group via `Group.SetClients`/`Group.SetStream` —
-  fully dynamic, no restart, no config change.
-- **No teardown on disconnect:** unlike the original per-zone-dynamic
-  design, a claimed slot's `shairport-sync` keeps running (and
-  advertising via mDNS) even while its zone is disconnected — Snapcast's
-  RPC restriction (above) means the plugin can't remove the stream
-  without the same restart cost as creating one, so it's left running
-  idle instead. A phantom AirPlay target for a currently-offline zone is
-  a minor, accepted UX blemish (§12), not a functional problem — audio
-  sent to it simply has no Snapclient to reach.
-- **Pool exhaustion:** a zone beyond `airplay.maxZones` claims no slot
-  and has no AirPlay path (§2); the Admin panel should surface this
-  plainly rather than fail silently.
+- **Create on zone connect:** the plugin calls `Stream.AddStream` with an
+  `airplay://` URI pointing at `shairport-sync` (installed inside the
+  configured `sandbox_dir`, ARCHITECTURE.md §2.4) and a `name` derived
+  from `airplay.namePattern` (§9) using the zone's real name — correct
+  from the start, no placeholder-then-rename step needed. The resulting
+  stream's implicit group (§13) is then bound to that zone's Snapclient
+  via `Group.SetClients`.
+- **Remove on zone disconnect:** `Stream.RemoveStream` on that zone's
+  stream id — cleanly kills `shairport-sync` and drops the mDNS
+  advertisement (confirmed, above). No phantom idle receivers for
+  offline zones, unlike the earlier pool design.
+- **No pool, no cap, no slot numbering:** each zone gets its own stream
+  created/removed on demand — there is nothing to run out of, so
+  `airplay.maxZones` and `ZoneAssignment.airplaySlot` (both artifacts of
+  the pool design) are removed (§4, §9, §12). `n2kZone` is unaffected —
+  its 4-zone cap comes from the Fusion-Link protocol itself (confirmed,
+  §13), not from anything Snapcast-related.
+- **`controlscript=` deliberately not used** in the stream URI — a known,
+  currently-open Snapcast bug (#1455) leaks that auxiliary process on
+  removal. Not needed anyway: `shairport-sync`'s metadata pipe
+  (`--metadata-pipename`, below) is independent of the stream URI's
+  `controlscript` parameter.
 - **Naming collisions:** if two zones would produce the same advertised
   name (e.g. duplicate zone names), the plugin must disambiguate (e.g.
   append the Snapclient id) rather than silently advertise two identical
   AirPlay targets — exact scheme TBD at implementation time.
-- **Metadata pipe (every slot, regardless of the pool-vs-dynamic decision
-  in §13):** each slot's `shairport-sync` is launched with
-  `--metadata-enable` pointed at a per-slot named pipe. The plugin tails
+- **Metadata pipe:** each zone's `shairport-sync` is launched with
+  `--metadata-enable` pointed at a per-zone named pipe. The plugin tails
   that pipe, parses `shairport-sync`'s documented DAAP-tagged metadata
   format, and writes `title`/`artist`/`album` into that zone's
   `Zone.airplay.track` (§4) as they arrive — feeding both the zone-level
@@ -631,8 +626,7 @@ all-zone fallback, volume duck, §2):**
 | `n2k.deviceName`                              | `"Jukebox"`                     | Presented as the Fusion device's name on the bus                                                                                                                                         |
 | `n2k.deviceInstance`                          | `0`                             | NMEA2000 device instance, in case a boat somehow runs two jukebox-like devices                                                                                                           |
 | `airplay.enabled`                             | `true`                          | Master toggle for per-zone AirPlay receivers (§6.4)                                                                                                                                      |
-| `airplay.maxZones`                            | `4`                             | Size of the pre-provisioned AirPlay stream pool (§6.4); zones beyond this get no AirPlay slot                                                                                            |
-| `airplay.namePattern`                         | `"{boatName} - {zoneName}"`     | mDNS name template for a slot once claimed by a zone; `{boatName}` sourced from SignalK's own vessel name where available                                                                |
+| `airplay.namePattern`                         | `"{boatName} - {zoneName}"`     | mDNS name template a zone's receiver is created with; `{boatName}` sourced from SignalK's own vessel name where available                                                                |
 | `vhf.enabled`                                 | `true`                          | Master toggle for the VHF pause trigger (§6.5); harmless if no VHF plugin is installed — the path just never fires                                                                       |
 | `vhf.resumeDelaySeconds`                      | `5`                             | Delay after `communication.vhf.busy` clears before auto-resuming                                                                                                                         |
 | `voiceDucking.enabled`                        | `true`                          | Master toggle for the voice-activity duck trigger (§6.5)                                                                                                                                 |
@@ -698,7 +692,7 @@ all-zone fallback, volume duck, §2):**
 - [signalk-container-helper](https://github.com/hoeken/signalk-container-helper) — the `ManagedContainer` archetype this plugin follows.
 - [signalk-wyoming](https://github.com/hoeken/signalk-wyoming) — sibling voice-assistant plugin family; its SPEC.md documents the non-goal/stretch-goal boundary referenced in §1.2.
 - [Mopidy](https://mopidy.com/) / [Mopidy-Spotify](https://github.com/mopidy/mopidy-spotify) / [Iris](https://github.com/jaedb/Iris)
-- [Snapcast](https://github.com/badaix/snapcast)
+- [Snapcast](https://github.com/snapcast/snapcast)
 - [@canboat/ts-pgns](https://github.com/canboat/ts-pgns) — structured PGN
   definitions (v1.11.18 checked) confirming Fusion-Link's actual
   zone/source field layout (§6.3, §12, §13): per-zone volume
@@ -828,18 +822,19 @@ all-zone fallback, volume duck, §2):**
   their music while salon keeps the Mopidy queue going," which is the
   behavior actually requested; Snapcast's per-group stream assignment
   makes per-zone receivers the natural fit rather than a workaround.
-- **Pre-provisioned AirPlay pool + one-time restart-per-new-zone, over
-  either (a) fully dynamic per-zone stream creation or (b) permanent
-  generic slot names.** (a) turned out not to be possible — Snapcast
-  blocks runtime creation of `process`-type streams (`airplay` included)
-  as a deliberate CVE-2023-36177 fix, not an oversight (§13). Between the
-  two real remaining options, a one-time restart when a genuinely new
-  zone first appears (rare — happens once per physical zone added to the
-  boat, ever) was chosen over permanently generic "AirPlay 1..N" slot
-  names, because the whole point of naming receivers per zone ("Jukebox -
-  Cockpit") was for someone to find the right one without being told
-  which number maps to which speaker — that benefit is worth one brief
-  boat-wide audio bounce per zone's lifetime, paid once.
+- **True per-zone dynamic stream creation, superseding an earlier
+  pre-provisioned-pool design.** The pool existed because Snapcast's
+  v0.31.0–v0.32.x control API blocked runtime creation of `process`-type
+  streams (`airplay` included) as a CVE-2023-36177 fix — real at the
+  time, but version-specific, not a permanent Snapcast property.
+  Confirmed via research (§13) that v0.33.0+ reopened it via a
+  `sandbox_dir` containment check, and that `RemoveStream` cleanly kills
+  the subprocess rather than orphaning it. Since this plugin pins its own
+  Snapserver version, requiring ≥ 0.33.0 costs nothing — reverting to
+  the simpler design (create on connect, remove on disconnect, correct
+  name from the start) removed the entire pool/slot-numbering/
+  restart-on-new-zone/phantom-idle-slot complexity that design had
+  needed as a workaround for a constraint that no longer applies.
 - **Duck triggers are plain delta subscriptions, not a cross-plugin API**
   — considered and rejected the alternative (signalk-jukebox exposing a
   "duck me" API that signalk-wyoming/a VHF plugin calls into, or vice
@@ -895,13 +890,6 @@ all-zone fallback, volume duck, §2):**
   starts/stops, which reads as broken to anyone watching the MFD. A fixed
   zone priority is predictable, even if "always zone 0" isn't perfectly
   fair to zone 1's listener.
-- **Leaving a disconnected zone's AirPlay slot running rather than
-- **Leaving a disconnected zone's AirPlay slot running rather than
-  tearing it down** — the alternative (restart to remove it, then
-  restart again if the zone reconnects) would mean _every_ zone
-  connect/disconnect costs a restart, defeating the entire point of the
-  pool/bind-unbind split above. A harmless idle `shairport-sync` instance
-  is a better trade than that.
 
 ## 13. Open Questions
 
@@ -947,11 +935,10 @@ all-zone fallback, volume duck, §2):**
   unilaterally here; not attempted for MVP.
 - **Restoring a zone's volume after a voice duck when the user changed
   it mid-duck.** Current design overwrites whatever the user set during
-  the duck with the pre-duck value (§6.5, §12) — same category of
-  "known simplification, not solved" as the AirPlay pool's phantom-slot
-  behavior. Worth watching for real complaints before adding the
-  complexity of tracking "did the user touch this since ducking
-  started."
+  the duck with the pre-duck value (§6.5, §12) — an accepted
+  simplification, not solved. Worth watching for real complaints before
+  adding the complexity of tracking "did the user touch this since
+  ducking started."
 - **Mopidy-Spotify credential shape — researched and corrected, plus a
   real reliability finding.** Confirmed (2026-08-22): `username`/
   `password` config is deprecated as of Mopidy-Spotify v5.0.0 (Spotify
@@ -1005,24 +992,3 @@ all-zone fallback, volume duck, §2):**
   out to be "effectively none," that part of §6.3 may not be worth
   maintaining relative to Fusion-Link. Revisit once there's a real device
   to test against.
-- **Whether Snapserver supports live stream/group provisioning —
-  researched and resolved: partially.** Confirmed against Snapcast's
-  current control API docs and source history (current stable: v0.35.0):
-  `Stream.AddStream`/`RemoveStream` exist, but are restricted by an
-  explicit type whitelist (`pipe`, `file`, `tcp`, `alsa`, `jack`, `meta`)
-  — `process`-type streams (which `airplay` is, internally) were
-  deliberately excluded when the RPC was reinstated in v0.31.0 after
-  being pulled entirely in v0.30.0 to fix CVE-2023-36177 (arbitrary
-  command execution via the stream-add RPC). There is also no
-  `Group.Create`/`Delete` RPC at all — groups only exist implicitly via
-  client-to-stream assignment. What **is** fully dynamic: reassigning an
-  existing client between existing groups/streams
-  (`Group.SetClients`/`SetStream`), which is what §6.4's pool-based
-  design relies on. §6.4 has been revised accordingly (pre-provisioned
-  pool + one-time restart per brand-new zone, not per-connect). One loose
-  end: whether a v0.33.0 changelog line suggesting process-stream RPC
-  support might have loosened this since v0.31.0 is unconfirmed and
-  contradicts the current docs/PR discussion — worth a direct source
-  check (`server/streamreader/stream_manager.cpp` in the actual
-  Snapcast version this project pins) before relying on the restriction
-  being unchanged.

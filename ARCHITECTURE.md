@@ -51,23 +51,25 @@ command from any one of them is visible everywhere else (SPEC.md §3.2).
                                 │ Snapcast stream :1704
                      ┌──────────▼──────────────────────────┐
                      │   boat LAN                            │
-                     │  Snapclient: Cockpit  (n2kZone 0)      │◀── bound to AirPlay slot 1 "Jukebox - Cockpit"
-                     │  Snapclient: Salon    (n2kZone 1)      │◀── bound to AirPlay slot 2 "Jukebox - Salon"
-                     │  Snapclient: Cabin    (no N2K slot)    │◀── unbound (pool slot 3/4 free or unclaimed)
+                     │  Snapclient: Cockpit  (n2kZone 0)      │◀── own AirPlay receiver "Jukebox - Cockpit"
+                     │  Snapclient: Salon    (n2kZone 1)      │◀── own AirPlay receiver "Jukebox - Salon"
+                     │  Snapclient: Cabin    (no N2K slot)    │◀── own AirPlay receiver "Jukebox - Cabin"
                      └──────────────────────────────────────┘
 ```
 
-AirPlay receivers are a **fixed pool** of `airplay.maxZones` (SPEC.md §9)
-statically-configured Snapcast `airplay`-type streams (each managing its
-own `shairport-sync` instance + mDNS advertisement), provisioned once at
-container start — **not** created per zone on demand. Snapcast's control
-API cannot add `process`-type streams (which `airplay` is) at runtime, by
-deliberate design (a CVE fix — ARCHITECTURE.md §5, SPEC.md §13). A zone
-permanently claims one pool slot the first time it's ever seen (persisted,
-like `n2kZone`); a zone's Snapclient group is dynamically bound to
-either the shared Jukebox (Mopidy) stream or its claimed AirPlay slot at
-any given moment via `Group.SetClients`/`SetStream` — which is fully
-dynamic — never created/destroyed per connect (SPEC.md §2, §6.4).
+Each zone gets its own Snapcast `airplay`-type stream (each managing its
+own `shairport-sync` instance + mDNS advertisement), **created the
+moment the zone connects and removed the moment it disconnects** — no
+pool, no cap, no persisted slot. Confirmed via research (§5, SPEC.md
+§13): Snapserver ≥ 0.33.0's control API can both create and cleanly
+remove `process`-type streams (which `airplay` is) at runtime, via a
+`stream.sandbox_dir` containment check rather than an outright block —
+an earlier design believed this was permanently closed and built a
+pre-provisioned-pool workaround around that belief; it wasn't, and the
+workaround is gone. Each zone's Snapclient keeps a single Snapcast group
+for its whole lifetime; switching between the shared Jukebox (Mopidy)
+stream and that zone's own AirPlay receiver is `Group.SetStream` on that
+one group — fully dynamic, no restart (SPEC.md §2, §6.4).
 
 Snapclients are external — deployed and managed independently, out of
 this plugin's scope (SPEC.md §1.4). The N2K bus connection is likewise
@@ -121,25 +123,33 @@ other directly) when a command arrives on its interface.
   their volume/mute, writing zone state into the canonical store;
   applies zone volume/mute writes that originated elsewhere to Snapserver
   the same way.
-- **Manages the AirPlay slot pool** (SPEC.md §6.4 — revised after
-  research confirmed Snapcast blocks runtime creation of `airplay`/
-  `process`-type streams, SPEC.md §13): at container start, ensures
-  `airplay.maxZones` streams exist in Snapserver's static config, each
-  spawning its own `shairport-sync`. On a **brand-new** zone's first
-  discovery, claims the next free slot, persists the assignment
-  (`ZoneAssignment.airplaySlot`), regenerates Snapserver's config with
-  that slot's real zone name, and triggers a one-time Snapserver restart.
-  On every subsequent connect/disconnect of an **already-claimed** zone,
-  binds/unbinds its Snapclient to its already-named slot via
-  `Group.SetClients`/`SetStream` — no restart, no config change. Also
-  watches for a zone's group switching which stream it's attached to
-  (Jukebox ↔ that zone's claimed AirPlay slot) and writes the resulting
+- **Creates and removes each zone's AirPlay receiver** (SPEC.md §6.4;
+  `src/airplay/receiver.ts`) — confirmed via research (SPEC.md §13) that
+  Snapserver ≥ 0.33.0 supports this at runtime via `Stream.AddStream`/
+  `RemoveStream`, superseding an earlier pre-provisioned-pool design. On
+  zone connect: `Stream.AddStream` with an `airplay://` URI carrying the
+  zone's real name from the start (no placeholder-then-rename step). On
+  zone disconnect: `Stream.RemoveStream` — confirmed to cleanly kill the
+  `shairport-sync` process group, not orphan it. Neither the new stream
+  nor its removal touches the zone's group directly — creating a
+  receiver doesn't switch the zone onto it (§2's "connecting is the
+  switch" rule); that's `src/airplay/zone-binding.ts`'s job, described
+  next.
+- **Switches each zone between its Jukebox and AirPlay streams**
+  (`src/airplay/zone-binding.ts`): each zone's Snapclient keeps one
+  Snapcast group for its whole lifetime; watching for that group's
+  stream-status changes (an AirPlay session starting/ending, detected
+  via Snapserver reporting the stream's status — SPEC.md §3.2) drives a
+  `Group.SetStream` call pointing the zone's _existing_ group at either
+  the shared Jukebox stream or that zone's own AirPlay stream — never a
+  client reassignment between groups, and no group is ever created or
+  deleted (there is no such RPC, SPEC.md §13). Writes the resulting
   `activeSource` into canonical state (§2.1).
-- **Tails each claimed slot's `shairport-sync` metadata pipe** (SPEC.md
-  §6.4) and writes parsed title/artist/album into that zone's
-  `Zone.airplay.track` (§2.1) as it arrives — feeds both the zone-level
-  SK path and, for N2K-zoned zones, the N2K/Fusion adapter's broadcast
-  (§2.3, SPEC.md §6.3).
+- **Tails each zone's `shairport-sync` metadata pipe** (SPEC.md §6.4;
+  `src/airplay/metadata.ts`) and writes parsed title/artist/album into
+  that zone's `Zone.airplay.track` (§2.1) as it arrives — feeds both the
+  zone-level SK path and, for N2K-zoned zones, the N2K/Fusion adapter's
+  broadcast (§2.3, SPEC.md §6.3).
 - Serves the Admin config panel (via `signalk-container-helper/ui`
   building blocks) for backend toggles, library path, Spotify
   credentials, zone controls, N2K/Fusion settings, AirPlay toggle, and
@@ -267,20 +277,27 @@ the source of truth for field-level detail, SPEC.md §4 is.
   snapshot/restore. Contract: Mopidy's documented core API
   (`core.playback.*`, `core.tracklist.*`).
 - **Snapserver JSON-RPC control API** (in-container) — zone discovery,
-  volume/mute control, and dynamic client↔group/stream reassignment for
-  the AirPlay pool (SPEC.md §6.4). **Confirmed via research (SPEC.md
-  §13, current stable Snapcast v0.35.0):** `Stream.AddStream`/
-  `RemoveStream` exist but are restricted to `pipe`/`file`/`tcp`/`alsa`/
-  `jack`/`meta` — `process`-type streams (`airplay` included) were
-  deliberately excluded as part of the CVE-2023-36177 fix (arbitrary
-  command execution via the stream-add RPC), and there is no
-  `Group.Create`/`Delete` RPC at all. Only `Group.SetClients`/
-  `Group.SetStream` (reassigning an existing client between existing
-  groups/streams) is fully dynamic — which is what the pool design in
-  §2.2 relies on; creating a new named AirPlay stream still requires a
-  Snapserver config change + restart. Contract: Snapcast's documented
-  JSON-RPC protocol (`doc/json_rpc_api/control.md` in the Snapcast repo,
-  now at `snapcast/snapcast` — moved from `badaix/snapcast`).
+  volume/mute control, and per-zone AirPlay stream create/remove/switch
+  (SPEC.md §6.4). **Confirmed via research (SPEC.md §13), in two passes:**
+  (1) `Stream.AddStream`/`RemoveStream` can create/remove `process`-type
+  streams (`airplay` included) as of Snapserver v0.33.0+ (PR #1444,
+  "Sandbox") — the v0.31.0 restriction that motivated an earlier
+  pre-provisioned-pool design was a real, but version-specific,
+  CVE-2023-36177 mitigation, since loosened in favor of a `stream.
+sandbox_dir` executable-path containment check. This project pins its
+  own Snapserver version (§2.4), so requiring ≥ 0.33.0 costs nothing.
+  (2) `RemoveStream` was independently confirmed to SIGINT the whole
+  process group (killing `shairport-sync` and its children, not
+  orphaning them) and to leave any group still pointed at the removed
+  stream merely unassigned (silent), not errored — the one caveat is an
+  open Snapcast bug (#1455) where a stream URI's `controlscript=`
+  parameter specifically leaks on removal; this plugin doesn't use that
+  parameter (§6.4), so it doesn't apply. There is no `Group.Create`/
+  `Delete` RPC — `Group.SetStream` (pointing an existing group at a
+  different stream) is what switches a zone between Jukebox and AirPlay,
+  never a group creation. Contract: Snapcast's documented JSON-RPC
+  protocol (`doc/json_rpc_api/control.md` in the Snapcast repo, now at
+  `snapcast/snapcast` — moved from `badaix/snapcast`).
 - **SignalK's NMEA2000 provider** — outbound via `app.emit('nmea2000out',
 pgnString)`, inbound via SignalK's PGN-in event hook. The plugin does
   not talk to a CAN interface directly; whatever gateway (Actisense,
@@ -357,13 +374,19 @@ ts-pgns` (the structured PGN library `signalk-fusion-stereo` uses for
   mDNS names (`{boatName} - {zoneName}`, SPEC.md §9) are broadcast in
   clear on the LAN — a mild information disclosure (boat name, zone
   layout) worth a one-line README note, not a blocking concern.
-- **Snapserver's `Stream.AddStream`/`RemoveStream` RPC type whitelist
-  (SPEC.md §13) exists specifically because unrestricted process-stream
-  creation was a real, exploited-class vulnerability (CVE-2023-36177,
-  arbitrary command execution).** This plugin must never work around
-  that restriction (e.g. by shelling out to add a raw `process://`
-  stream some other way) — the pool-based design (§2.2) exists in part
-  _because_ that path is deliberately closed, not merely inconvenient.
+- **Snapserver's `stream.sandbox_dir` containment check (SPEC.md §13)
+  exists specifically because unrestricted process-stream creation was a
+  real, exploited-class vulnerability (CVE-2023-36177, arbitrary command
+  execution) — it replaced, rather than removed, that protection.** This
+  plugin's `airplay://` stream URIs (§2.2, `src/airplay/receiver.ts`)
+  must only ever reference the `shairport-sync` executable the image
+  places inside the configured sandbox directory (`image/Dockerfile`) —
+  never a user-influenced or dynamically-constructed path. The zone
+  name embedded in each stream's `name=` parameter is free text (from
+  Snapclient-reported hostnames or SK config) and must be treated as
+  such when building the URI — not filesystem-path input, but still
+  worth sanitizing/escaping properly rather than string-concatenating it
+  in.
 
 ## 7. File Structure
 
@@ -390,9 +413,9 @@ signalk-jukebox/
 │   │   ├── entertainment-pgn.ts # standard NMEA2000 Entertainment PGN encode/decode
 │   │   └── zone-mapping.ts    # Snapclient id <-> n2kZone persistence (§2.1)
 │   ├── airplay/
-│   │   ├── pool.ts             # static N-slot stream config generation + Snapserver restart-on-claim (§2.2, §6.4)
-│   │   ├── zone-binding.ts     # dynamic Group.SetClients/SetStream bind/unbind, no restart (§2.2, §6.4)
-│   │   └── metadata.ts         # tails each slot's shairport-sync metadata pipe, parses DAAP tags into Zone.airplay.track (§2.2, SPEC.md §6.4)
+│   │   ├── receiver.ts         # per-zone Stream.AddStream/RemoveStream create+remove (§2.2, §6.4)
+│   │   ├── zone-binding.ts     # Group.SetStream switch between Jukebox/AirPlay, same group throughout (§2.2, §6.4)
+│   │   └── metadata.ts         # tails each zone's shairport-sync metadata pipe, parses DAAP tags into Zone.airplay.track (§2.2, SPEC.md §6.4)
 │   ├── duck-triggers/
 │   │   ├── vhf.ts              # communication.vhf.busy -> Mopidy pause/resume (§2.5, SPEC.md §6.5)
 │   │   └── voice.ts            # voice.satellites.*.state -> zone volume duck/restore (§2.5, SPEC.md §6.5)
@@ -465,12 +488,11 @@ signalk-jukebox/
   §2.3).
 - **Android-equivalent casting** (SPEC.md §1.4, §10.2) — Chromecast,
   Bluetooth A2DP, or DLNA/UPnP would each need their own adapter
-  alongside `src/airplay/`; whichever is chosen should reuse the same
-  _pooled-slot-with-persisted-claim_ pattern (§2.2, §6.4) rather than
-  assume dynamic runtime stream creation is available — Snapcast's
-  security-motivated RPC restriction (§5) is a Snapcast property, not an
-  `airplay`-specific one, and would very likely apply equally to however
-  a Cast/Bluetooth/DLNA source gets fed into Snapcast.
+  alongside `src/airplay/`; whichever is chosen should confirm its own
+  stream type is covered by the same Snapserver `sandbox_dir` mechanism
+  AirPlay relies on (§5) — if it needs a _different_ Snapcast stream type
+  than `process`/`pipe`/etc., that's a fresh compatibility question, not
+  something to assume solved by AirPlay's precedent.
 - **A real address-claiming Fusion device, if best-effort proves
   insufficient** (SPEC.md §12, §13) — if testing against real MFD
   hardware shows the current approach doesn't work well enough, the

@@ -1,30 +1,35 @@
 import type { SnapserverClient } from "../snapserver-client.js";
 import type { ZoneActiveSource } from "../types.js";
 
-// Dynamic client<->group/stream binding for an already-claimed AirPlay
-// slot (SPEC.md §6.4). This is the fully-dynamic half of the pool design
-// -- no restart, no config change, just Group.SetClients/SetStream against
-// streams/groups that already exist from the static pool config (pool.ts).
+// Switching a zone's audio source (SPEC.md §6.4, §2). Each zone
+// (Snapclient) keeps its own single Snapcast group throughout its
+// lifetime -- switching source is pointing that *same* group at a
+// different stream (Group.SetStream), never moving the client between
+// groups or creating one.
+//
+// Called on:
+// - a zone's AirPlay stream transitioning to/from an active session
+//   (detected via Snapserver reporting the stream's status, SPEC.md §3.2)
+// - zone disconnect: no explicit call needed here -- the stream is
+//   removed instead (receiver.ts), which unassigns the group automatically
+//   (confirmed, SPEC.md §13)
 
-export interface ZoneBindingTarget {
-  snapclientId: string;
-  jukeboxGroupId: string; // the shared Mopidy/Jukebox stream's group
-  airplaySlotGroupId: string; // this zone's claimed slot's group
+export interface ZoneStreamIds {
+  groupId: string;
+  jukeboxStreamId: string;
+  /** This zone's own AirPlay receiver stream id (receiver.ts). Absent
+   * before the receiver has been created (e.g. briefly during zone
+   * connect) -- switching to `airplay` is a no-op until it exists. */
+  airplayStreamId?: string;
 }
 
-/**
- * Binds a zone's Snapclient to the given source. Called on:
- * - zone connect (bind to whichever source it was last on, default jukebox)
- * - zone disconnect (no-op on the Snapcast side -- the client just drops)
- * - an AirPlay session starting/ending on the zone's claimed slot (detected
- *   via Snapserver reporting the group's stream changed, SPEC.md §3.2)
- */
-export async function bindZoneSource(
+export async function switchZoneSource(
   client: SnapserverClient,
-  target: ZoneBindingTarget,
+  target: ZoneStreamIds,
   source: ZoneActiveSource,
 ): Promise<void> {
-  const groupId =
-    source === "jukebox" ? target.jukeboxGroupId : target.airplaySlotGroupId;
-  await client.setClientStream(target.snapclientId, groupId);
+  const streamId =
+    source === "jukebox" ? target.jukeboxStreamId : target.airplayStreamId;
+  if (!streamId) return;
+  await client.setGroupStream(target.groupId, streamId);
 }

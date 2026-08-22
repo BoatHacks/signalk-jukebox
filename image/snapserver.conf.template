@@ -1,0 +1,37 @@
+# snapserver.conf template (ARCHITECTURE.md §2.4, §7). Rendered by
+# entrypoint.sh via envsubst -- NOT verified against a real Snapserver
+# build (no container runtime available when this was written).
+#
+# No per-zone AirPlay streams are declared here (SPEC.md §6.4, §13):
+# those are created/removed at runtime via Stream.AddStream/RemoveStream
+# by the plugin (src/airplay/receiver.ts), not pre-declared in static
+# config. This file only needs the Jukebox (Mopidy) source and the
+# sandbox_dir that makes runtime airplay:// stream creation possible.
+
+[stream]
+# Mopidy's audio output is piped here (see mopidy.conf.template's [audio]
+# section) -- entrypoint.sh creates this FIFO before starting either
+# process. TODO(verify): confirm sampleformat matches what Mopidy's
+# GStreamer pipeline actually emits.
+source = pipe:///tmp/snapfifo?name=Jukebox&sampleformat=48000:16:2
+
+# Runtime-created airplay streams (Stream.AddStream) must reference an
+# executable inside this directory -- confirmed via research (SPEC.md
+# §13) this is Snapserver >= 0.33.0's replacement for the earlier
+# process-stream RPC restriction. entrypoint.sh places a shairport-sync
+# wrapper here before starting Snapserver.
+sandbox_dir = /app/sandbox
+
+[http]
+enabled = true
+bind_to_address = 0.0.0.0
+port = 1705
+
+[tcp]
+enabled = true
+bind_to_address = 0.0.0.0
+port = 1704
+
+# Deliberately NOT exposed via signalkAccessiblePorts (src/container.ts,
+# SPEC.md §6 security note) -- these ports are LAN-facing via
+# signalk-container's own networking, not routed through the SK server.

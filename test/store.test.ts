@@ -73,28 +73,14 @@ describe("StateStore", () => {
 
   it("persists and restores zone assignments independent of live zone state", () => {
     const store = new StateStore(createInitialState());
-    store.setZoneAssignment("cockpit", { n2kZone: 0, airplaySlot: 0 });
+    store.setZoneAssignment("cockpit", { n2kZone: 0 });
 
     const snapshot = store.getPersistedZoneAssignments();
     const restored = new StateStore(createInitialState());
     restored.restoreZoneAssignments(snapshot);
 
-    expect(restored.getZoneAssignment("cockpit")).toEqual({
-      n2kZone: 0,
-      airplaySlot: 0,
-    });
+    expect(restored.getZoneAssignment("cockpit")).toEqual({ n2kZone: 0 });
     // Restoring assignments doesn't fabricate a live zone.
     expect(restored.getZone("cockpit")).toBeUndefined();
-  });
-
-  it("merges partial setZoneAssignment calls rather than overwriting", () => {
-    const store = new StateStore(createInitialState());
-    store.setZoneAssignment("cockpit", { n2kZone: 0 });
-    store.setZoneAssignment("cockpit", { airplaySlot: 1 });
-
-    expect(store.getZoneAssignment("cockpit")).toEqual({
-      n2kZone: 0,
-      airplaySlot: 1,
-    });
   });
 });

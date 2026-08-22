@@ -175,11 +175,6 @@ export default function plugin(app: App) {
               default: true,
               title: "Enable AirPlay zones",
             },
-            maxZones: {
-              type: "number",
-              default: 4,
-              title: "Max AirPlay zones",
-            },
             namePattern: { type: "string", default: "{boatName} - {zoneName}" },
           },
         },

@@ -1,49 +1,50 @@
 import type { ZoneAssignment } from "../types.js";
 
-// Shared "claim the next free numbered slot, once, forever" allocator used
-// by both the N2K zone mapping (SPEC.md §2) and the AirPlay slot pool
-// (SPEC.md §6.4) -- same rule, two different capped ranges (n2kZone: 0-3;
-// airplaySlot: 0..maxZones-1).
+// "Claim the next free numbered n2kZone, once, forever" (SPEC.md §2, §12).
+// AirPlay used to share this allocator for its stream pool, but that
+// pool no longer exists (SPEC.md §6.4, §13 -- Snapcast can create/remove
+// per-zone streams on demand, so there's nothing to number or persist);
+// n2kZone is the only caller now, capped at 4 by the Fusion-Link protocol
+// itself (confirmed, SPEC.md §13), not by anything Snapcast-related.
 
 /**
- * Returns the lowest slot number in [0, cap) not already claimed by any
- * other zone's assignment, or undefined if the pool is full (SPEC.md §2 —
- * a zone beyond the cap simply gets no slot, not an error).
+ * Returns the lowest n2kZone number in [0, cap) not already claimed by
+ * any other zone's assignment, or undefined if the range is full
+ * (SPEC.md §2 -- a zone beyond the cap simply gets no n2kZone, not an
+ * error).
  */
-export function nextFreeSlot(
+export function nextFreeN2kZone(
   assignments: Record<string, ZoneAssignment>,
   cap: number,
-  field: "n2kZone" | "airplaySlot",
 ): number | undefined {
   const taken = new Set(
     Object.values(assignments)
-      .map((a) => a[field])
+      .map((a) => a.n2kZone)
       .filter((n): n is number => n !== undefined),
   );
-  for (let slot = 0; slot < cap; slot++) {
-    if (!taken.has(slot)) return slot;
+  for (let zone = 0; zone < cap; zone++) {
+    if (!taken.has(zone)) return zone;
   }
   return undefined;
 }
 
 /**
- * Claims a slot for `zoneId` in `field` if it doesn't already have one and
- * the pool isn't full. Idempotent: if the zone already has a slot, returns
- * it unchanged rather than reassigning (SPEC.md §12 — assignments are
+ * Claims an n2kZone for `zoneId` if it doesn't already have one and the
+ * range isn't full. Idempotent: if the zone already has one, returns it
+ * unchanged rather than reassigning (SPEC.md §12 -- assignments are
  * permanent once made).
  */
-export function claimSlot(
+export function claimN2kZone(
   assignments: Record<string, ZoneAssignment>,
   zoneId: string,
   cap: number,
-  field: "n2kZone" | "airplaySlot",
 ): number | undefined {
-  const existing = assignments[zoneId]?.[field];
+  const existing = assignments[zoneId]?.n2kZone;
   if (existing !== undefined) return existing;
 
-  const slot = nextFreeSlot(assignments, cap, field);
-  if (slot === undefined) return undefined;
+  const zone = nextFreeN2kZone(assignments, cap);
+  if (zone === undefined) return undefined;
 
-  assignments[zoneId] = { ...assignments[zoneId], [field]: slot };
-  return slot;
+  assignments[zoneId] = { ...assignments[zoneId], n2kZone: zone };
+  return zone;
 }

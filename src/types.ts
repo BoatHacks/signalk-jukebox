@@ -33,7 +33,7 @@ export interface AirPlayTrack {
 }
 
 export interface ZoneAirPlayInfo {
-  /** The mDNS name this zone's claimed slot advertises, once claimed. */
+  /** The mDNS name this zone's receiver was created with (SPEC.md §6.4). */
   streamName: string;
   /** Whether a device currently has an active AirPlay session to it. */
   connected: boolean;
@@ -59,15 +59,15 @@ export interface Zone {
 }
 
 /**
- * Persisted Snapclient id -> zone-numbering assignment. Assigned once, the
- * first time a zone is ever seen, and never reassigned automatically
- * thereafter (SPEC.md §2, §4, §6.4, §12 — this is what makes "Zone 1" on an
- * MFD, or a named AirPlay target, mean the same physical speaker across
- * restarts and reconnects).
+ * Persisted Snapclient id -> N2K zone number. Assigned once, the first
+ * time a zone is ever seen, and never reassigned automatically thereafter
+ * (SPEC.md §2, §4, §12 — this is what makes "Zone 1" on an MFD mean the
+ * same physical speaker across restarts and reconnects). AirPlay has no
+ * equivalent here (SPEC.md §6.4, §12) -- a zone's AirPlay receiver is
+ * created/removed on demand, not claimed from a persisted slot.
  */
 export interface ZoneAssignment {
   n2kZone?: number;
-  airplaySlot?: number;
 }
 
 export type N2kDeviceState = "unclaimed" | "claimed";
@@ -105,7 +105,6 @@ export interface PluginSettings {
   };
   airplay: {
     enabled: boolean;
-    maxZones: number;
     namePattern: string;
   };
   vhf: {
@@ -136,7 +135,6 @@ export const SCHEMA_DEFAULTS: PluginSettings = {
   },
   airplay: {
     enabled: true,
-    maxZones: 4,
     namePattern: "{boatName} - {zoneName}",
   },
   vhf: {

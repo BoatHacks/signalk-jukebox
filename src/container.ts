@@ -5,12 +5,13 @@ import {
 import type { PluginSettings } from "./types.js";
 
 // The custom signalk-jukebox container image (ARCHITECTURE.md §2.4): Mopidy
-// + Iris + Snapserver (with its statically pre-provisioned AirPlay stream
-// pool, SPEC.md §6.4) in one image, built from image/Dockerfile.
+// + Iris + Snapserver in one image, built from image/Dockerfile (draft, not
+// build-tested -- see that file's header). Snapserver is pinned >= 0.33.0
+// so the plugin can create/remove per-zone airplay streams at runtime
+// (SPEC.md §6.4, §13) -- no static AirPlay stream pool to configure here.
 //
-// TODO(image): image/Dockerfile does not exist yet -- this points at a
-// placeholder repository until the image is built and published per
-// ARCHITECTURE.md §8.
+// TODO(image): not yet published -- this points at a placeholder registry
+// path until the image is built and pushed per ARCHITECTURE.md §8.
 export const JUKEBOX_IMAGE = "ghcr.io/boathacks/signalk-jukebox";
 
 export const MOPIDY_PORT = 6680;
@@ -53,7 +54,6 @@ export function createManagedContainer({
         JUKEBOX_SPOTIFY_CLIENT_ID: settings.backends.spotify.clientId ?? "",
         JUKEBOX_SPOTIFY_CLIENT_SECRET:
           settings.backends.spotify.clientSecret ?? "",
-        JUKEBOX_AIRPLAY_MAX_ZONES: String(settings.airplay.maxZones),
       },
       volumes: libraryMount ? { "/music": libraryMount.source } : undefined,
       restart: "unless-stopped",
