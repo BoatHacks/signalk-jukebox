@@ -1,4 +1,4 @@
-import { createProxyMiddleware } from "http-proxy-middleware";
+import { createProxyMiddleware, fixRequestBody } from "http-proxy-middleware";
 import type { RouterLike, ResponseLike } from "signalk-container-helper";
 
 /** Mutable box for the container's resolved base URL (ARCHITECTURE.md §2.2)
@@ -41,6 +41,15 @@ interface ExpressRouterLike extends RouterLike {
  * UI (image/webui/jukebox_webui/static/app.js) only polls the HTTP
  * JSON-RPC endpoint, so this isn't a gap for it -- revisit before
  * mounting a WS-dependent client (e.g. Iris, once compatible) here.
+ *
+ * `fixRequestBody` is required, not optional (confirmed by build-testing
+ * against a real devpod): signalk-server's own body-parsing middleware
+ * already drains a POST's JSON body before this catch-all `.use()` sees
+ * it, so http-proxy would otherwise pipe an already-consumed stream --
+ * the target then hangs waiting for body bytes the (correct)
+ * Content-Length header promised but that will never arrive. Every GET
+ * (no body) proxied fine without it; every POST (Mopidy's /mopidy/rpc,
+ * used for all JSON-RPC calls) hung indefinitely.
  */
 export function registerMopidyProxy(
   router: RouterLike,
@@ -49,6 +58,7 @@ export function registerMopidyProxy(
   const proxy = createProxyMiddleware({
     router: () => state.address ?? undefined,
     changeOrigin: true,
+    on: { proxyReq: fixRequestBody },
   });
   (router as ExpressRouterLike).use((req, res, next) => {
     if (!state.address) {
