@@ -642,6 +642,7 @@ all-zone fallback, volume duck, §2):**
 | `n2k.deviceInstance`                          | `0`                             | NMEA2000 device instance, in case a boat somehow runs two jukebox-like devices                                                                                                           |
 | `airplay.enabled`                             | `true`                          | Master toggle for per-zone AirPlay receivers (§6.4)                                                                                                                                      |
 | `airplay.namePattern`                         | `"{boatName} - {zoneName}"`     | mDNS name template a zone's receiver is created with; `{boatName}` sourced from SignalK's own vessel name where available                                                                |
+| `airplay.hostNetworking`                      | `false`                         | Required for AirPlay to actually be discoverable/reachable from real devices (§6.4, §12) — switches the container to `networkMode: host`. Off by default; the operator explicitly opts in |
 | `vhf.enabled`                                 | `true`                          | Master toggle for the VHF pause trigger (§6.5); harmless if no VHF plugin is installed — the path just never fires                                                                       |
 | `vhf.resumeDelaySeconds`                      | `5`                             | Delay after `communication.vhf.busy` clears before auto-resuming                                                                                                                         |
 | `voiceDucking.enabled`                        | `true`                          | Master toggle for the voice-activity duck trigger (§6.5)                                                                                                                                 |
@@ -954,6 +955,41 @@ all-zone fallback, volume duck, §2):**
   starts/stops, which reads as broken to anyone watching the MFD. A fixed
   zone priority is predictable, even if "always zone 0" isn't perfectly
   fair to zone 1's listener.
+- **AirPlay discoverability requires opting into `networkMode: host`
+  (`airplay.hostNetworking`, §9), and no non-host-networking alternative
+  was found that actually works on real container-runtime deployments.**
+  mDNS advertisement and each per-zone receiver's dynamically-chosen
+  RTSP/RTP ports don't reach the LAN through this container's default
+  bridged networking at all (confirmed by build-testing, §13's build-
+  testing entries below). Two alternatives were investigated and both
+  ruled out rather than just assumed impractical:
+  - **An mDNS reflector run from the plugin's own process** (inside
+    signalk-server, which itself already runs with host networking) —
+    doesn't work with rootless Podman's `pasta` networking backend,
+    confirmed by checking for a host-visible bridge interface
+    (`ip link show type bridge`) and finding none: pasta fully
+    encapsulates a container's network in its own namespace with no
+    shared L2 segment to reflect between, and has no multicast-
+    forwarding feature of its own (it's built for unicast NAT). A
+    reflector needs simultaneous presence on both networks in one
+    process; there is no host-side attachment point to get that from.
+  - **macvlan/ipvlan** (a second, LAN-facing network interface
+    attached to the jukebox container alongside its normal one, so
+    control traffic keeps working while AirPlay/mDNS get real LAN
+    presence) — not pursued further: unclear whether
+    `signalk-container`/`signalk-container-helper`'s config surface
+    (a single `networkMode` string, ARCHITECTURE.md §5) supports
+    attaching a container to two networks at once at all, and macvlan
+    is well known to be unreliable on WiFi interfaces specifically
+    (many drivers/APs reject the additional MAC address it needs) —
+    which is exactly the interface an iPhone's AirPlay traffic would
+    arrive over.
+  Given both alternatives are either broken by this host's networking
+  backend or of uncertain/fragile feasibility, the accepted tradeoff is:
+  AirPlay requires the operator to explicitly opt into host networking
+  (default off) via the config panel's `hostNetworking` toggle, which
+  documents the tradeoff (this container then shares the host's full
+  network namespace and port space) directly in its warning banner.
 
 ## 13. Open Questions
 
@@ -1027,6 +1063,40 @@ all-zone fallback, volume duck, §2):**
     reverse-proxied web UI path — real content still comes from the
     running container, this is just what makes the plugin discoverable
     as a "webapp" in the SignalK sense (ARCHITECTURE.md §7).
+- **AirPlay receiver creation build-tested for the first time (2026-08-22)
+  — three more real bugs found and fixed, confirmed by actually creating
+  one and checking `avahi-browse`.** Previously `airplay/receiver.ts`'s
+  URI-building was written against Snapcast's documented usage comment
+  alone, without a running Snapserver to test `Stream.AddStream` against.
+  - `shairport-sync` hard-requires a working Avahi client to start at
+    all — without one it fails immediately and Snapcast's airplay stream
+    type retries it in a tight crash loop, spawning zombie processes
+    every ~100ms. Neither `dbus-daemon` nor `avahi-daemon` were ever
+    started in the image; `entrypoint.sh` now starts both.
+  - The `airplay://` URI's path must be shairport-sync's full path
+    inside `sandbox_dir` (`/app/sandbox/shairport-sync`), not just
+    `/shairport-sync` — the bare filename resolves via a PATH search
+    that finds the image's apt-installed `/usr/bin/shairport-sync`
+    first and gets rejected by Snapcast's sandbox containment check.
+  - `devicename=` (not `name=`) is what becomes shairport-sync's
+    `--name=`, the actual AirPlay mDNS-advertised device name —
+    `name=` is only the Snapcast stream's own internal id. The
+    previous version only set `name=`, which would have left every
+    zone's receiver advertised under shairport-sync's own hardcoded
+    default ("Snapcast") rather than its intended per-zone name. Also
+    removed a nonexistent `metadata_pipename` parameter (confirmed
+    against Snapcast's actual source: the metadata pipe path is derived
+    internally from pid+port, not settable via the URI).
+  After these fixes, a real `airplay://` stream creates successfully and
+  `avahi-browse` confirms a correctly-named AirPlay (`AirTunes Remote
+  Audio`) service is advertised. `port=` is also confirmed real (pins
+  the RTSP port; Snapcast auto-increments on a bind conflict, confirmed
+  in the source's stderr-handling), which is what keeps each zone's
+  AirPlay traffic inside a small, boundable port range rather than a
+  fully dynamic one — useful background for §12's host-networking
+  decision, though it doesn't change that decision (mDNS itself still
+  needs a real LAN-facing network regardless of how bounded the ports
+  are).
 - **shairport-sync metadata pipe: exact parsing approach not chosen.**
   The pipe emits DAAP-tagged binary chunks (a documented but not
   trivially-JSON format — `shairport-sync`'s own docs and reference

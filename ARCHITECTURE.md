@@ -413,6 +413,20 @@ ts-pgns` (the structured PGN library `signalk-fusion-stereo` uses for
   mDNS names (`{boatName} - {zoneName}`, SPEC.md §9) are broadcast in
   clear on the LAN — a mild information disclosure (boat name, zone
   layout) worth a one-line README note, not a blocking concern.
+- **AirPlay requires opting into `networkMode: host` (`airplay.
+  hostNetworking`, SPEC.md §9, §12) — a real, larger exposure than the
+  point above, not just "unauthenticated on the LAN."** Host networking
+  removes this container's network namespace isolation entirely: every
+  port it opens binds directly on the host's real interfaces, sharing
+  the host's full port space with every other process on the machine
+  (the SignalK server itself included), and the container can reach
+  anything the host's own network stack can reach with no NAT boundary
+  in between. This is confirmed to be the only working option given
+  this project's actual constraints (SPEC.md §12 documents the mDNS-
+  reflector and macvlan alternatives investigated and ruled out) — not
+  a default, and not silently applied: the config panel's toggle is off
+  by default and its warning banner states the tradeoff plainly before
+  an operator opts in.
 - **Snapserver's `stream.sandbox_dir` containment check (SPEC.md §13)
   exists specifically because unrestricted process-stream creation was a
   real, exploited-class vulnerability (CVE-2023-36177, arbitrary command
