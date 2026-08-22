@@ -121,6 +121,42 @@ export interface PluginSettings {
   };
 }
 
+/** Merge a saved/partial config over SCHEMA_DEFAULTS, one level into each
+ * nested settings group -- a plain `{ ...SCHEMA_DEFAULTS, ...rawConfig }`
+ * silently drops an entire nested group's defaults (e.g. backends.radio,
+ * backends.spotify) whenever the saved config doesn't happen to include
+ * every group, which then crashes `container.ts`'s buildConfig() reading
+ * `.enabled` off the resulting `undefined` (confirmed against a real
+ * signalk-server: a config saved with only `backends.local` set threw
+ * "Cannot read properties of undefined (reading 'enabled')" on start). */
+export function mergeSettings(
+  rawConfig: Partial<PluginSettings>,
+): PluginSettings {
+  return {
+    ...SCHEMA_DEFAULTS,
+    ...rawConfig,
+    backends: {
+      local: { ...SCHEMA_DEFAULTS.backends.local, ...rawConfig.backends?.local },
+      radio: { ...SCHEMA_DEFAULTS.backends.radio, ...rawConfig.backends?.radio },
+      spotify: {
+        ...SCHEMA_DEFAULTS.backends.spotify,
+        ...rawConfig.backends?.spotify,
+      },
+    },
+    n2k: { ...SCHEMA_DEFAULTS.n2k, ...rawConfig.n2k },
+    airplay: { ...SCHEMA_DEFAULTS.airplay, ...rawConfig.airplay },
+    vhf: { ...SCHEMA_DEFAULTS.vhf, ...rawConfig.vhf },
+    voiceDucking: {
+      ...SCHEMA_DEFAULTS.voiceDucking,
+      ...rawConfig.voiceDucking,
+      satelliteZoneMap: {
+        ...SCHEMA_DEFAULTS.voiceDucking.satelliteZoneMap,
+        ...rawConfig.voiceDucking?.satelliteZoneMap,
+      },
+    },
+  };
+}
+
 export const SCHEMA_DEFAULTS: PluginSettings = {
   backends: {
     local: { enabled: true },

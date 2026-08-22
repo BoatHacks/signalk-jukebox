@@ -7,7 +7,7 @@ import { createManagedContainer, MOPIDY_PORT } from "./container.js";
 import { StateStore, createInitialState } from "./state/store.js";
 import { registerRoutes } from "./routes.js";
 import { publishStateChanges, type AppLike } from "./paths.js";
-import { SCHEMA_DEFAULTS, type PluginSettings } from "./types.js";
+import { SCHEMA_DEFAULTS, mergeSettings, type PluginSettings } from "./types.js";
 
 // Plugin entry point, following the ManagedContainer archetype
 // (signalk-container-helper README "Quick start: a managed container").
@@ -37,7 +37,7 @@ export default function plugin(app: App) {
     // startSafely catch and report async failures (per container-helper
     // convention).
     start(rawConfig: Partial<PluginSettings>) {
-      settings = { ...SCHEMA_DEFAULTS, ...rawConfig };
+      settings = mergeSettings(rawConfig);
       unpublish = publishStateChanges(app, jukebox.id, store);
 
       startSafely(app, async () => {
