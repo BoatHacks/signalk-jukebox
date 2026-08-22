@@ -1,8 +1,7 @@
 #!/bin/sh
-# Container entrypoint (ARCHITECTURE.md §2.4, §7). NOT verified against a
-# real build/run -- no container runtime was available when this was
-# written. Renders both config templates, wires up the Mopidy->Snapserver
-# audio pipe and the AirPlay sandbox dir, then runs both processes.
+# Container entrypoint (ARCHITECTURE.md §2.4, §7). Renders both config
+# templates, wires up the Mopidy->Snapserver audio pipe and the AirPlay
+# sandbox dir, then runs both processes.
 #
 # TODO(verify): the two-process supervision below (background Snapserver,
 # foreground Mopidy, trap-based cleanup) is a minimal first draft, not a
@@ -13,7 +12,16 @@
 
 set -e
 
-mkdir -p /data /cache /app/sandbox
+mkdir -p /data /cache /app/sandbox /var/run/dbus
+
+# shairport-sync hard-requires a working Avahi client to advertise itself
+# over mDNS -- confirmed by build-testing (SPEC.md §13): without this, it
+# refuses to start at all ("fatal error: Could not establish mDNS
+# advertisement!") and Snapcast's airplay stream type retries it in a
+# tight crash loop, spawning zombie processes every ~100ms. avahi-daemon
+# itself needs the D-Bus system bus present first.
+dbus-daemon --system --fork
+avahi-daemon --no-chroot -D
 
 # Snapserver's runtime-created airplay:// streams (SPEC.md §6.4, §13) must
 # reference an executable inside sandbox_dir -- copied, not symlinked, to
