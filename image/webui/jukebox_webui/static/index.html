@@ -60,6 +60,33 @@
   .hint { font-size: 0.75rem; color: var(--muted); margin-top: 0.5rem; }
   .status-dot { display: inline-block; width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--muted); margin-right: 0.4rem; }
   .status-dot.ok { background: #4caf50; }
+  .zones-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem; }
+  .zones-header h2 { font-size: 0.95rem; margin: 0; }
+  .everywhere-btn {
+    background: var(--accent); border: none; color: #0a0a0a; border-radius: 8px;
+    padding: 0.4rem 0.8rem; font-size: 0.8rem; font-weight: 600; cursor: pointer;
+  }
+  .zone-empty { color: var(--muted); font-size: 0.85rem; }
+  .zone-row { padding: 0.75rem 0; border-top: 1px solid var(--border); }
+  .zone-row:first-of-type { border-top: none; padding-top: 0; }
+  .zone-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem; }
+  .zone-name { font-weight: 600; font-size: 0.95rem; }
+  .zone-name .status-dot { margin-right: 0.5rem; }
+  .zone-source {
+    font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.03em;
+    padding: 0.15rem 0.5rem; border-radius: 999px; color: var(--muted); border: 1px solid var(--border);
+  }
+  .zone-source.jukebox { color: #0a0a0a; background: var(--accent); border-color: var(--accent); }
+  .zone-source.airplay { color: #0a0a0a; background: #b28dff; border-color: #b28dff; }
+  .zone-controls { display: flex; align-items: center; gap: 0.6rem; }
+  .zone-controls input[type="range"] { flex: 1; accent-color: var(--accent); }
+  .zone-controls button {
+    background: none; border: 1px solid var(--border); color: var(--text); border-radius: 6px;
+    padding: 0.3rem 0.6rem; font-size: 0.8rem; cursor: pointer;
+  }
+  .zone-controls button.play-here { background: var(--accent); color: #0a0a0a; border-color: var(--accent); }
+  .zone-controls button.play-here:disabled { opacity: 0.5; cursor: default; }
+  .zone-controls .mute-btn.muted { color: var(--accent); border-color: var(--accent); }
 </style>
 </head>
 <body>
@@ -95,6 +122,14 @@
       Replaces track-directory extensions this minimal UI doesn't have (e.g. TuneIn)
       &mdash; any playable stream URL or backend URI works directly.
     </div>
+  </section>
+
+  <section class="panel zones">
+    <div class="zones-header">
+      <h2>Zones</h2>
+      <button class="everywhere-btn" id="everywhereBtn">Play here everywhere</button>
+    </div>
+    <div id="zoneList"><div class="zone-empty">No zones connected</div></div>
   </section>
 </main>
 <script src="app.js"></script>

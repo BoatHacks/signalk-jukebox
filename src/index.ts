@@ -3,10 +3,16 @@ import {
   resolveMount,
   type RouterLike,
 } from "signalk-container-helper";
-import { createManagedContainer, MOPIDY_PORT } from "./container.js";
+import {
+  createManagedContainer,
+  MOPIDY_PORT,
+  SNAPCAST_CONTROL_PORT,
+} from "./container.js";
 import { StateStore, createInitialState } from "./state/store.js";
-import { registerRoutes } from "./routes.js";
+import { registerRoutes, type SnapserverClientState } from "./routes.js";
 import { registerMopidyProxy, type MopidyProxyState } from "./proxy.js";
+import { SnapserverClient } from "./snapserver-client.js";
+import { startZoneSync } from "./zone-sync.js";
 import { publishStateChanges, type AppLike } from "./paths.js";
 import { SCHEMA_DEFAULTS, mergeSettings, type PluginSettings } from "./types.js";
 
@@ -29,9 +35,12 @@ export default function plugin(app: App) {
   let settings: PluginSettings = SCHEMA_DEFAULTS;
   const store = new StateStore(createInitialState());
   let unpublish: (() => void) | null = null;
+  let stopZoneSync: (() => void) | null = null;
   // Filled in once container.start() resolves an address (registerWithRouter
   // runs synchronously before that) -- see proxy.ts.
   const proxyState: MopidyProxyState = { address: null };
+  // Same pattern, for routes.ts's zone volume/mute/source writes.
+  const snapserverState: SnapserverClientState = { client: null };
 
   const jukebox = {
     id: "signalk-jukebox",
@@ -69,11 +78,19 @@ export default function plugin(app: App) {
         const { address } = await container.start(settings.imageTag);
         proxyState.address = address;
 
-        // TODO(implementation): wire up mopidy-client.ts /
-        // snapserver-client.ts polling loops that feed the StateStore --
-        // this is the next layer to build now that the reverse proxy
-        // (proxy.ts) and container image (ARCHITECTURE.md §2.4) exist to
-        // test against.
+        // Snapserver's control port is published loopback-only
+        // (container.ts's `ports`) specifically for this -- the plugin
+        // runs on the same host as the container, never over the LAN.
+        const snapserverClient = new SnapserverClient({
+          host: "127.0.0.1",
+          port: SNAPCAST_CONTROL_PORT,
+        });
+        snapserverState.client = snapserverClient;
+        stopZoneSync = startZoneSync(store, snapserverClient);
+
+        // TODO(implementation): wire up mopidy-client.ts's polling loop
+        // that feeds playback state into the StateStore -- zones are
+        // covered now (zone-sync.ts), playback isn't yet.
 
         // TODO(implementation): if settings.n2k.enabled, construct
         // FusionAdapter/EntertainmentPgnAdapter (n2k/fusion.ts,
@@ -89,6 +106,9 @@ export default function plugin(app: App) {
     async stop() {
       unpublish?.();
       unpublish = null;
+      stopZoneSync?.();
+      stopZoneSync = null;
+      snapserverState.client = null;
       proxyState.address = null;
       await container?.stop(); // unregister updates + stop, never throws
       app.setPluginStatus("Stopped");
@@ -98,9 +118,7 @@ export default function plugin(app: App) {
       registerRoutes({
         router,
         store,
-        // TODO: real SnapserverClient once the container is reachable --
-        // routes.ts needs one to apply zone volume/mute writes.
-        snapserver: undefined as never,
+        snapserver: snapserverState,
       });
 
       container?.registerUpdateRoutes(router, {

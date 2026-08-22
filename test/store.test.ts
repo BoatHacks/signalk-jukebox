@@ -4,6 +4,7 @@ import type { Zone } from "../src/types.js";
 
 const zone: Zone = {
   id: "cockpit",
+  groupId: "group-cockpit",
   name: "Cockpit",
   connected: true,
   volume: 50,

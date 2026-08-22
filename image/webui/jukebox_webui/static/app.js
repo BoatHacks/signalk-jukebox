@@ -115,3 +115,142 @@ els.playUriBtn.addEventListener("click", async () => {
 
 refresh();
 setInterval(refresh, 2000);
+
+// --- Zones (source/zone picker) -------------------------------------------
+// "../api/zones" is this plugin's own REST route (routes.ts), not proxied
+// through to the container the way RPC_URL is -- it only resolves when this
+// page is reached through the plugin's reverse proxy (the normal path, via
+// the SignalK webapps list/App Dock), not when hitting the container's own
+// port directly. That's expected: zone/source control needs the plugin's
+// Snapserver connection, which only exists on the proxied path.
+const ZONES_URL = "../api/zones";
+
+const zoneList = document.getElementById("zoneList");
+const everywhereBtn = document.getElementById("everywhereBtn");
+const zoneRows = new Map(); // zone id -> { row, volumeInput, muteBtn, playBtn, sourceBadge, nameDot }
+const draggingZoneVolumes = new Set();
+let lastZones = [];
+
+async function zonePost(id, path, body) {
+  const res = await fetch(`${ZONES_URL}/${encodeURIComponent(id)}/${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `${path} failed`);
+  }
+}
+
+function buildZoneRow(zone) {
+  const row = document.createElement("div");
+  row.className = "zone-row";
+  row.innerHTML = `
+    <div class="zone-top">
+      <span class="zone-name"><span class="status-dot"></span><span class="name-text"></span></span>
+      <span class="zone-source"></span>
+    </div>
+    <div class="zone-controls">
+      <button class="play-here">Play here</button>
+      <input type="range" min="0" max="100" value="0">
+      <span class="volume-value">0%</span>
+      <button class="mute-btn">Mute</button>
+    </div>
+  `;
+  const nameDot = row.querySelector(".status-dot");
+  const nameText = row.querySelector(".name-text");
+  const sourceBadge = row.querySelector(".zone-source");
+  const playBtn = row.querySelector(".play-here");
+  const volumeInput = row.querySelector("input[type=range]");
+  const volumeValue = row.querySelector(".volume-value");
+  const muteBtn = row.querySelector(".mute-btn");
+
+  playBtn.addEventListener("click", async () => {
+    await zonePost(zone.id, "source", { source: "jukebox" });
+    refreshZones();
+  });
+
+  volumeInput.addEventListener("mousedown", () => draggingZoneVolumes.add(zone.id));
+  volumeInput.addEventListener("touchstart", () => draggingZoneVolumes.add(zone.id));
+  volumeInput.addEventListener("input", (e) => {
+    volumeValue.textContent = `${e.target.value}%`;
+  });
+  volumeInput.addEventListener("change", async (e) => {
+    await zonePost(zone.id, "volume", { volume: Number(e.target.value) });
+    draggingZoneVolumes.delete(zone.id);
+    refreshZones();
+  });
+
+  muteBtn.addEventListener("click", async () => {
+    const entry = zoneRows.get(zone.id);
+    const nextMuted = !entry.lastMuted;
+    await zonePost(zone.id, "mute", { muted: nextMuted });
+    refreshZones();
+  });
+
+  return { row, nameDot, nameText, sourceBadge, playBtn, volumeInput, volumeValue, muteBtn, lastMuted: false };
+}
+
+function updateZoneRow(entry, zone) {
+  entry.nameDot.classList.toggle("ok", zone.connected);
+  entry.nameText.textContent = zone.name || zone.id;
+  entry.sourceBadge.textContent = zone.activeSource === "jukebox" ? "Jukebox" : "AirPlay";
+  entry.sourceBadge.className = `zone-source ${zone.activeSource}`;
+  entry.playBtn.disabled = zone.activeSource === "jukebox";
+  entry.playBtn.classList.toggle("play-here", true);
+  if (!draggingZoneVolumes.has(zone.id)) {
+    entry.volumeInput.value = zone.volume;
+    entry.volumeValue.textContent = `${zone.volume}%`;
+  }
+  entry.lastMuted = zone.muted;
+  entry.muteBtn.textContent = zone.muted ? "Unmute" : "Mute";
+  entry.muteBtn.classList.toggle("muted", zone.muted);
+}
+
+async function refreshZones() {
+  try {
+    const res = await fetch(ZONES_URL);
+    if (!res.ok) throw new Error("zones unavailable");
+    const zones = await res.json();
+    lastZones = zones;
+
+    const seen = new Set();
+    for (const zone of zones) {
+      seen.add(zone.id);
+      let entry = zoneRows.get(zone.id);
+      if (!entry) {
+        entry = buildZoneRow(zone);
+        zoneRows.set(zone.id, entry);
+        zoneList.appendChild(entry.row);
+      }
+      updateZoneRow(entry, zone);
+    }
+    for (const [id, entry] of zoneRows) {
+      if (!seen.has(id)) {
+        entry.row.remove();
+        zoneRows.delete(id);
+      }
+    }
+    if (zones.length === 0) {
+      zoneList.innerHTML = '<div class="zone-empty">No zones connected</div>';
+    } else if (zoneList.querySelector(".zone-empty")) {
+      zoneList.innerHTML = "";
+      for (const entry of zoneRows.values()) zoneList.appendChild(entry.row);
+    }
+  } catch {
+    // Zone control isn't available on this path (e.g. hitting the
+    // container directly, not through the plugin's proxy) -- leave
+    // whatever was last shown rather than clearing it on a blip.
+  }
+}
+
+everywhereBtn.addEventListener("click", async () => {
+  await Promise.all(
+    lastZones.map((zone) => zonePost(zone.id, "source", { source: "jukebox" }).catch(() => {})),
+  );
+  refreshZones();
+});
+
+refreshZones();
+setInterval(refreshZones, 2000);

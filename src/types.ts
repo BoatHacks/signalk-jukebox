@@ -48,6 +48,10 @@ export interface ZoneAirPlayInfo {
 export interface Zone {
   /** Snapclient id, as assigned by Snapserver. */
   id: string;
+  /** This zone's own Snapcast group id -- each zone keeps one group for
+   * its whole lifetime (SPEC.md §2, §12); switching source is
+   * Group.SetStream on it, never a client reassignment between groups. */
+  groupId: string;
   name: string;
   connected: boolean;
   volume: number;
