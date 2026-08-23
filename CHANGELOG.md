@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.0.3] - 2026-08-23
+
+### Changed
+
+- npm package description now leads with an experimental/untested warning,
+  so it's visible immediately in the SignalK app store listing. Also
+  dropped a stale reference to Mopidy-Iris (replaced by the built-in
+  web UI, `image/webui`).
+
 ## [0.0.2] - 2026-08-23
 
 ### Added
