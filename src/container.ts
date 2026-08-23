@@ -49,6 +49,18 @@ export function createManagedContainer({
     // as a literal tag, and `podman pull ...:auto` 404s (no such tag was
     // ever published).
     resolveTag: (requested) => (requested === "auto" ? "latest" : requested),
+    // Default 120_000ms (signalk-container-helper's own default) is far
+    // longer than signalk-container actually needs to register its global
+    // in real use (both plugins start together at server boot) -- and it's
+    // long enough to break SignalK's plugin-ci lifecycle check, confirmed
+    // by build-testing: that harness's mock server has no signalk-container
+    // at all, so `stop()` (which waits out any in-flight `start()`) blocks
+    // for the full budget before the harness's own 2-minute step timeout
+    // can be safely cleared, given the check calls start/stop/start/stop
+    // in sequence. 20s is still generous for the real case and leaves
+    // comfortable headroom under that 2-minute ceiling for the genuinely-
+    // absent case (CI, or a misconfigured install).
+    managerTimeoutMs: 20_000,
     buildConfig: (tag) => ({
       image: JUKEBOX_IMAGE,
       tag,
