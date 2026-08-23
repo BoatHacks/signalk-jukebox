@@ -6,6 +6,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.0.5] - 2026-08-23
+
+### Added
+
+- `GET /api/satellites` — known `voice.satellites.<id>` ids, backing the
+  config panel's satellite dropdown.
+- The config panel's per-satellite duck-mapping rows now use dropdowns
+  (populated from `/api/satellites` and `/api/zones`) instead of free-text
+  fields for satellite id and zone id.
+
+### Fixed
+
+- Config panel's image-version dropdown showing "⚠ Could not reach GitHub
+  — showing last known versions, retry" (and the retry button not
+  helping) on every install. Root cause: `GET /api/versions` was never
+  actually implemented — a stale comment claimed
+  `ManagedContainer.registerUpdateRoutes` provided it, but that helper
+  only covers the single latest-version check/apply flow. The request
+  fell through to the plugin's catch-all Mopidy proxy, which returned a
+  non-2xx response the UI library reports with that exact (misleading —
+  it isn't specific to GitHub reachability) hardcoded message. Now backed
+  by a real route (`src/ghcr-versions.ts`) that lists tags from
+  `ghcr.io/boathacks/signalk-jukebox` directly.
+
 ## [0.0.4] - 2026-08-23
 
 ### Added

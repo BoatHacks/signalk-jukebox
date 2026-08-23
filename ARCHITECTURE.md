@@ -529,6 +529,7 @@ signalk-jukebox/
 │   │   ├── vhf.ts              # communication.vhf.busy -> Mopidy pause/resume (§2.5, SPEC.md §6.5)
 │   │   └── voice.ts            # voice.satellites.*.state -> zone volume duck/restore (§2.5, SPEC.md §6.5)
 │   ├── routes.ts              # /api/* Express routes
+│   ├── ghcr-versions.ts       # GHCR tags/list -> VersionInfo[], backs GET /api/versions (SPEC.md §6.1)
 │   ├── paths.ts                # entertainment.* SK path publishing
 │   ├── controls.ts             # entertainment.jukebox.playback.controls.* -> Mopidy play/pause/next/previous (§2.7, SPEC.md §6.2)
 │   ├── put-handlers.ts         # PUT handling for playback.volume / zones.<id>.volume/muted (§2.8, SPEC.md §6.2)

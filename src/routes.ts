@@ -1,6 +1,8 @@
 import type { RouterLike } from "signalk-container-helper";
 import type { StateStore } from "./state/store.js";
 import type { SnapserverClient } from "./snapserver-client.js";
+import { fetchGhcrVersions } from "./ghcr-versions.js";
+import { JUKEBOX_IMAGE } from "./container.js";
 
 // RouterLike's handler receives `req: unknown` (signalk-container-helper is
 // transport-agnostic); this plugin runs on SignalK's Express router, so a
@@ -23,10 +25,18 @@ export interface SnapserverClientState {
   client: SnapserverClient | null;
 }
 
+export interface SatellitesAppLike {
+  /** Standard SignalK plugin app API (@signalk/server-api's AppLike) --
+   * returns the value at a vessels.self-relative path, or undefined if
+   * nothing's ever been received there. */
+  getSelfPath(path: string): unknown;
+}
+
 export interface RegisterRoutesArgs {
   router: RouterLike;
   store: StateStore;
   snapserver: SnapserverClientState;
+  app: SatellitesAppLike;
 }
 
 const JUKEBOX_STREAM_ID = "Jukebox";
@@ -35,6 +45,7 @@ export function registerRoutes({
   router,
   store,
   snapserver,
+  app,
 }: RegisterRoutesArgs): void {
   router.get("/api/status", (_req, res) => {
     res.json(store.getPlayback());
@@ -42,6 +53,21 @@ export function registerRoutes({
 
   router.get("/api/zones", (_req, res) => {
     res.json(store.getZones());
+  });
+
+  // Backs the config panel's satellite-id dropdown for voiceDucking.
+  // satelliteZoneMap (SPEC.md §6.5, §9) -- voice.satellites.<id> is an
+  // external, optional delta from signalk-wyoming (ARCHITECTURE.md §2.5);
+  // this plugin doesn't track satellites itself, so it just reads
+  // whatever's currently in SignalK's own data model at that path, the
+  // same way it would read any other plugin's delta.
+  router.get("/api/satellites", (_req, res) => {
+    const satellites = app.getSelfPath("voice.satellites");
+    const ids =
+      satellites && typeof satellites === "object"
+        ? Object.keys(satellites as Record<string, unknown>)
+        : [];
+    res.json({ ids });
   });
 
   router.post("/api/zones/:id/volume", (rawReq, res) => {
@@ -126,7 +152,17 @@ export function registerRoutes({
       });
   });
 
-  // GET /api/update/check, POST /api/update/apply, GET /api/versions are
-  // registered separately via ManagedContainer.registerUpdateRoutes()
-  // (see index.ts), following signalk-container-helper's convention.
+  // GET /api/update/check and POST /api/update/apply are registered
+  // separately via ManagedContainer.registerUpdateRoutes() (see index.ts).
+  // /api/versions is NOT part of that helper -- it only covers the single
+  // "latest available version" check/apply flow (VersionSourceSpec has no
+  // GHCR-tags-list variant), so the config panel's version dropdown is
+  // backed by ghcr-versions.ts here instead (SPEC.md §6.1).
+  router.get("/api/versions", (_req, res) => {
+    fetchGhcrVersions(JUKEBOX_IMAGE)
+      .then((versions) => res.json({ versions }))
+      .catch((err: unknown) => {
+        res.status(502).json({ error: String(err) });
+      });
+  });
 }

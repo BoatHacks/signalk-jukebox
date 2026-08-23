@@ -380,7 +380,8 @@ signalk-container-helper conventions):
 | `POST /api/zones/:id/volume`                       | `{ volume: 0-100 }`                                      |
 | `POST /api/zones/:id/mute`                         | `{ muted: boolean }`                                     |
 | `GET /api/update/check` / `POST /api/update/apply` | Image update routes (`registerUpdateRoutes`, admin-only) |
-| `GET /api/versions`                                | Image version list for the config panel dropdown         |
+| `GET /api/versions`                                | Image version list for the config panel dropdown, from GHCR's own tags/list API (`src/ghcr-versions.ts`) — not `registerUpdateRoutes`, which only covers the single latest-version check/apply flow |
+| `GET /api/satellites`                              | `{ ids: string[] }` — known `voice.satellites.<id>` ids (via `app.getSelfPath`), for the config panel's per-satellite duck-mapping dropdown (§6.5, §9) |
 
 Actual playback control (play/pause/skip/queue/search) goes through the
 web client (§7) directly against Mopidy's own HTTP/JSON-RPC API — this

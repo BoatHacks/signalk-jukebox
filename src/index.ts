@@ -9,7 +9,11 @@ import {
   SNAPCAST_CONTROL_PORT,
 } from "./container.js";
 import { StateStore, createInitialState } from "./state/store.js";
-import { registerRoutes, type SnapserverClientState } from "./routes.js";
+import {
+  registerRoutes,
+  type SnapserverClientState,
+  type SatellitesAppLike,
+} from "./routes.js";
 import { registerMopidyProxy, type MopidyProxyState } from "./proxy.js";
 import { SnapserverClient } from "./snapserver-client.js";
 import { startZoneSync } from "./zone-sync.js";
@@ -35,7 +39,11 @@ import {
 // mostly wiring -- the real logic lives in state/store.ts,
 // container.ts, mopidy-client.ts, snapserver-client.ts, n2k/*, airplay/*.
 
-interface App extends AppLike, ControlsAppLike, PutHandlerAppLike {
+interface App
+  extends AppLike,
+    ControlsAppLike,
+    PutHandlerAppLike,
+    SatellitesAppLike {
   debug(msg: string): void;
   error(msg: string): void;
   getDataDirPath(): string;
@@ -175,6 +183,7 @@ export default function plugin(app: App) {
         router,
         store,
         snapserver: snapserverState,
+        app,
       });
 
       container?.registerUpdateRoutes(router, {

@@ -13,7 +13,7 @@ import {
   useStatusPoll,
   useVersions,
 } from "signalk-container-helper/ui";
-import { mergeSettings, type PluginSettings } from "../types.js";
+import { mergeSettings, type PluginSettings, type Zone } from "../types.js";
 
 // Custom config panel (ARCHITECTURE.md §7, signalk-container-helper's own
 // documented Module Federation pattern) -- replaces the auto-generated
@@ -46,6 +46,13 @@ export default function PluginConfigurationPanel({
     { fallback: {} },
   );
   const versions = useVersions(`${BASE}/api/versions`);
+  const { status: zones } = useStatusPoll<Zone[]>(`${BASE}/api/zones`, {
+    fallback: [],
+  });
+  const { status: satellites } = useStatusPoll<{ ids: string[] }>(
+    `${BASE}/api/satellites`,
+    { fallback: { ids: [] } },
+  );
 
   const reachable = status !== null;
   const trackName = status?.track?.name;
@@ -366,48 +373,76 @@ export default function PluginConfigurationPanel({
           Per-satellite zone mapping (optional -- unmapped satellites duck all
           zones)
         </Hint>
-        {voiceDucking.satelliteZoneMap.map((pair, i) => (
-          <div key={i} style={S.fieldRow}>
-            <input
-              style={S.inputSmall}
-              placeholder="voice.satellites.<id>"
-              value={pair.satelliteId}
-              onChange={(e) => {
-                const next = [...voiceDucking.satelliteZoneMap];
-                next[i] = { ...pair, satelliteId: e.target.value };
-                patch({
-                  voiceDucking: { ...voiceDucking, satelliteZoneMap: next },
-                });
-              }}
-            />
-            <input
-              style={S.inputSmall}
-              placeholder="zone id"
-              value={pair.zoneId}
-              onChange={(e) => {
-                const next = [...voiceDucking.satelliteZoneMap];
-                next[i] = { ...pair, zoneId: e.target.value };
-                patch({
-                  voiceDucking: { ...voiceDucking, satelliteZoneMap: next },
-                });
-              }}
-            />
-            <Button
-              variant="danger"
-              small
-              onClick={() => {
-                const next = voiceDucking.satelliteZoneMap.filter(
-                  (_, j) => j !== i,
-                );
-                patch({
-                  voiceDucking: { ...voiceDucking, satelliteZoneMap: next },
-                });
-              }}
-            >
-              Remove
-            </Button>
-          </div>
-        ))}
+        {voiceDucking.satelliteZoneMap.map((pair, i) => {
+          // Discovered ids only exist while that satellite/zone is
+          // currently known to SignalK/Snapserver -- a mapping saved
+          // earlier for one that's offline right now would otherwise
+          // vanish from a controlled <select>'s options and silently
+          // reset to blank, so the saved value is always included too.
+          const satelliteOptions = new Set(satellites?.ids ?? []);
+          if (pair.satelliteId) satelliteOptions.add(pair.satelliteId);
+          const zoneOptions = new Map(
+            (zones ?? []).map((zone) => [zone.id, zone.name]),
+          );
+          if (pair.zoneId && !zoneOptions.has(pair.zoneId)) {
+            zoneOptions.set(pair.zoneId, pair.zoneId);
+          }
+
+          return (
+            <div key={i} style={S.fieldRow}>
+              <select
+                style={S.inputSmall}
+                value={pair.satelliteId}
+                onChange={(e) => {
+                  const next = [...voiceDucking.satelliteZoneMap];
+                  next[i] = { ...pair, satelliteId: e.target.value };
+                  patch({
+                    voiceDucking: { ...voiceDucking, satelliteZoneMap: next },
+                  });
+                }}
+              >
+                <option value="">voice.satellites.&lt;id&gt;</option>
+                {[...satelliteOptions].map((id) => (
+                  <option key={id} value={id}>
+                    {id}
+                  </option>
+                ))}
+              </select>
+              <select
+                style={S.inputSmall}
+                value={pair.zoneId}
+                onChange={(e) => {
+                  const next = [...voiceDucking.satelliteZoneMap];
+                  next[i] = { ...pair, zoneId: e.target.value };
+                  patch({
+                    voiceDucking: { ...voiceDucking, satelliteZoneMap: next },
+                  });
+                }}
+              >
+                <option value="">zone</option>
+                {[...zoneOptions].map(([id, name]) => (
+                  <option key={id} value={id}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+              <Button
+                variant="danger"
+                small
+                onClick={() => {
+                  const next = voiceDucking.satelliteZoneMap.filter(
+                    (_, j) => j !== i,
+                  );
+                  patch({
+                    voiceDucking: { ...voiceDucking, satelliteZoneMap: next },
+                  });
+                }}
+              >
+                Remove
+              </Button>
+            </div>
+          );
+        })}
         <Button
           variant="secondary"
           small
