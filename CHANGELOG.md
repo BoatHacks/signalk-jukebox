@@ -6,6 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.0.7] - 2026-08-23
+
+### Fixed
+
+- The local snapclient's zone-renaming (0.0.6) had no effective retry
+  budget for a real cold-boot scenario: it gave up after 60s (30 attempts
+  x 2s), but confirmed by hand that after a full server reboot, every
+  container starts at once and the local snapclient can easily take
+  longer than that to actually connect -- the rename silently never
+  fired. Now retries for the plugin's whole lifetime instead of a fixed
+  attempt count, bounded only by plugin stop/restart, matching
+  signalk-container-helper's own "boot race" guidance for the boat case.
+
+### Changed
+
+- npm description no longer lists NMEA2000/Fusion-Link as a working
+  integration -- it's designed (SPEC.md §6.3) but not yet implemented
+  (`src/n2k/fusion.ts` and `entertainment-pgn.ts` are still stubs).
+
 ## [0.0.6] - 2026-08-23
 
 ### Added

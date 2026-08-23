@@ -157,13 +157,24 @@ export interface RenameableSnapserverClient {
  * has nothing to do with zone-sync's own responsibility (mirroring
  * Snapserver's canonical state into the store) -- it would be an odd fit
  * bolted onto that loop's per-tick logic.
+ *
+ * No default retry ceiling (`maxAttempts` defaults to unbounded) -- a
+ * short one was confirmed by hand to be a real bug, not just a
+ * theoretical edge case: after a full devpod reboot, every container
+ * (signalk-server, the main jukebox container, and this one) cold-started
+ * at once, and the local snapclient took longer than a 60s budget (30
+ * attempts * 2s, the original default) to actually connect, so the
+ * rename never fired at all -- exactly the "transient boot race" case
+ * signalk-container-helper's own `readinessRetry` doc comment calls out
+ * for the boat scenario. `stop()` (called on plugin stop/restart) is
+ * what actually bounds this, the same as everywhere else in this file.
  */
 export function renameLocalSnapclientZone(
   snapserver: RenameableSnapserverClient,
   zoneName: string,
   {
     intervalMs = 2000,
-    maxAttempts = 30,
+    maxAttempts = Infinity,
   }: { intervalMs?: number; maxAttempts?: number } = {},
 ): () => void {
   let stopped = false;
