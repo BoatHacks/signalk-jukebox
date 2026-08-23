@@ -6,6 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.0.4] - 2026-08-23
+
+### Added
+
+- `.github/workflows/plugin-ci.yml`: SignalK's standard reusable
+  plugin-CI workflow, cross-testing on Linux x64/arm64, macOS, Windows,
+  and armv7/Venus-OS (Cerbo). Avoids a flat -10 penalty on the SignalK
+  plugin registry's published score.
+- `.github/workflows/publish.yml`: npm OIDC trusted publishing —
+  releases now publish automatically on `gh release create`, no
+  NPM_TOKEN or interactive OTP required.
+
+### Fixed
+
+- The container's wait for `signalk-container` to register (on `stop()`
+  in particular) no longer blocks for the full default 120s when that
+  plugin isn't present — shortened to 20s. Confirmed via SignalK's
+  plugin-CI lifecycle check, whose mock server has no `signalk-container`
+  at all: the 120s wait collided with the check's own 2-minute step
+  timeout across its start/stop/start/stop sequence.
+
 ## [0.0.3] - 2026-08-23
 
 ### Changed
