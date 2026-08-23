@@ -22,16 +22,22 @@ import { mergeSettings, type PluginSettings, type Zone } from "../types.js";
 
 const BASE = "/plugins/signalk-jukebox";
 
-// Mirrors container.ts's own MOPIDY_PORT (not imported -- that module pulls
-// in signalk-container-helper's Node-only ManagedContainer machinery, which
-// doesn't belong in this Module Federation bundle). The web client
-// (Mopidy-MusicBox-Webclient, image/Dockerfile) is reached directly against
-// this published port, not through this plugin's own reverse proxy -- its
-// UI is entirely WebSocket-driven (Mopidy.js /mopidy/ws), and proxy.ts can't
-// forward a WS upgrade (no access to the raw http.Server via
-// registerWithRouter's Express Router). `window.location.hostname` gives the
-// same LAN-reachable host this admin page itself was loaded from.
+// Mirrors container.ts's own MOPIDY_PORT/SNAPWEB_PORT (not imported --
+// that module pulls in signalk-container-helper's Node-only
+// ManagedContainer machinery, which doesn't belong in this Module
+// Federation bundle). Both web clients below (Mopidy-MusicBox-Webclient
+// and Snapweb, image/Dockerfile) are reached directly against these
+// published ports, not through this plugin's own reverse proxy -- the
+// Mopidy one because its UI is entirely WebSocket-driven (Mopidy.js
+// /mopidy/ws) and proxy.ts can't forward a WS upgrade (no access to the
+// raw http.Server via registerWithRouter's Express Router); Snapweb for
+// the same reason, served by Snapserver's own real HTTP server, which
+// is deliberately NOT the same port as Snapserver's control API (see
+// SNAPWEB_PORT's own comment in container.ts for why they can't share
+// one). `window.location.hostname` gives the same LAN-reachable host
+// this admin page itself was loaded from.
 const MOPIDY_PORT = 6680;
+const SNAPWEB_PORT = 1780;
 
 interface PlaybackStatus {
   state?: string;
@@ -109,7 +115,18 @@ export default function PluginConfigurationPanel({
               }
             : undefined
         }
-      />
+      >
+        {reachable && (
+          <a
+            href={`http://${window.location.hostname}:${SNAPWEB_PORT}/`}
+            target="_blank"
+            rel="noreferrer"
+            style={S.link}
+          >
+            Snapweb ↗
+          </a>
+        )}
+      </StatusCard>
 
       {reachable && (
         <UpdateControls

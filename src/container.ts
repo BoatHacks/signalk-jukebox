@@ -21,6 +21,14 @@ export const JUKEBOX_IMAGE = "ghcr.io/boathacks/signalk-jukebox";
 export const MOPIDY_PORT = 6680;
 export const SNAPCAST_STREAM_PORT = 1704;
 export const SNAPCAST_CONTROL_PORT = 1705;
+/** Snapweb (image/Dockerfile), served by Snapserver's genuinely
+ * HTTP-capable `[http]` server -- deliberately a different port than
+ * SNAPCAST_CONTROL_PORT above. Confirmed by build-testing: Snapserver's
+ * `[tcp-control]`-equivalent raw-socket protocol and its real HTTP server
+ * are separate listeners under the hood, and putting both on the same
+ * port made the real one behave like the raw one (no HTTP parsing, no
+ * static files) -- see snapserver.conf.template's own note. */
+export const SNAPWEB_PORT = 1780;
 
 /** The container's address once `airplay.hostNetworking` is on: sharing
  * the host's network namespace directly means Mopidy's port literally
@@ -78,36 +86,41 @@ export function buildJukeboxConfig(
     // testing that omitting this entirely (the previous state of this
     // file) left Snapcast reachable only from this same host, not the
     // LAN, despite the docs already describing the intended LAN-facing
-    // design. The control port stays loopback-only: only this plugin's
-    // own SnapserverClient (running on this same host) needs it, and it
-    // has no authentication of its own (SPEC.md §6) to justify wider
-    // exposure.
+    // design.
     //
-    // MOPIDY_PORT is published here too, deliberately, alongside (not
-    // instead of) signalkAccessiblePorts above -- the web client
-    // (Mopidy-MusicBox-Webclient) is entirely WebSocket-driven
-    // (Mopidy.js /mopidy/ws), and this plugin's own reverse proxy
-    // (proxy.ts) can't forward a WS upgrade at all (no access to the raw
-    // http.Server via registerWithRouter's Express Router -- confirmed
-    // against SignalK's plugin API and signalk-container-helper's types,
-    // neither exposes one). The only way the browser's WS connection
-    // actually completes is a direct connection to the container's own
-    // port, bypassing SignalK's proxy and its auth entirely. Accepted
-    // trade-off (SPEC.md §6 security note): Mopidy has no auth of its own
-    // either way, same as the Snapcast control port above, but this
-    // binding is reachable from the whole LAN, not just this host --
-    // whoever asked for this swap chose that explicitly, after
-    // confirming both signalk-server's plugin API and the loopback-only
-    // signalkAccessiblePorts mechanism have no WS-proxying path.
+    // The control port stays loopback-only: only this plugin's own
+    // SnapserverClient (running on this same host) needs it, and it has
+    // no authentication of its own (SPEC.md §6) to justify wider
+    // exposure. Snapweb needs no exception here -- it's served on its
+    // own separate SNAPWEB_PORT below, not this one (see that constant's
+    // own comment for why they can't share a port).
+    //
+    // SNAPWEB_PORT and MOPIDY_PORT ARE bound to every interface, for the
+    // same reason each: their web clients (Snapweb; Mopidy-MusicBox-
+    // Webclient) run entirely over a WebSocket, and this plugin's own
+    // reverse proxy (proxy.ts) can't forward a WS upgrade at all (no
+    // access to the raw http.Server via registerWithRouter's Express
+    // Router -- confirmed against SignalK's plugin API and
+    // signalk-container-helper's types, neither exposes one). The only
+    // way the browser's WS connection actually completes is a direct
+    // connection to the container's own port, bypassing SignalK's proxy
+    // and its auth entirely. Accepted trade-off (SPEC.md §6 security
+    // note): neither Snapserver's control API nor Mopidy has any auth of
+    // its own either way, but these bindings are now reachable from the
+    // whole LAN, not just this host -- whoever asked for this chose that
+    // explicitly, after confirming signalk-server's plugin API, the
+    // loopback-only signalkAccessiblePorts mechanism, and this plugin's
+    // own reverse proxy all have no WS-proxying path.
     // `ports` is ignored once `networkMode` is set (signalk-container-
     // helper's own type docs), so only declare it when NOT using host
-    // networking; under host networking MOPIDY_PORT is already the
+    // networking; under host networking every port here is already the
     // host's own port with no publishing needed at all.
     ports: hostNetworking
       ? undefined
       : {
           [`${SNAPCAST_STREAM_PORT}/tcp`]: `0.0.0.0:${SNAPCAST_STREAM_PORT}`,
           [`${SNAPCAST_CONTROL_PORT}/tcp`]: `127.0.0.1:${SNAPCAST_CONTROL_PORT}`,
+          [`${SNAPWEB_PORT}/tcp`]: `0.0.0.0:${SNAPWEB_PORT}`,
           [`${MOPIDY_PORT}/tcp`]: `0.0.0.0:${MOPIDY_PORT}`,
         },
     // AirPlay discovery (mDNS) and each per-zone receiver's own

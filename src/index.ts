@@ -146,6 +146,8 @@ export default function plugin(app: App) {
         // Snapserver's control port is published loopback-only
         // (container.ts's `ports`) specifically for this -- the plugin
         // runs on the same host as the container, never over the LAN.
+        // Snapweb (a separate, LAN-published port -- SNAPWEB_PORT) needs
+        // no exception here.
         const snapserverClient = new SnapserverClient({
           host: "127.0.0.1",
           port: SNAPCAST_CONTROL_PORT,

@@ -9,13 +9,15 @@
 // no longer applies to the version this project requires.
 //
 // This is a raw TCP socket client, not HTTP -- confirmed by build-testing
-// against a real Snapserver 0.35.0: its control port (the one this
-// project's snapserver.conf.template exposes as [http] on 1705) does not
-// parse real HTTP requests at all, despite the config section's name.
-// Sending an actual `POST /jsonrpc HTTP/1.1` request makes it try to
-// JSON-parse the literal request bytes and fail; a bare
-// newline-terminated JSON-RPC line is what it actually expects, the same
-// wire format the (also raw-socket) tcp-control protocol uses.
+// against a real Snapserver 0.35.0. An earlier draft of
+// snapserver.conf.template put this port under `[http]` instead of
+// `[tcp-control]` (to reuse it for Snapweb too, before that got its own
+// SNAPWEB_PORT): despite the section's name, whatever's bound there does
+// not parse real HTTP requests at all -- sending an actual `POST /jsonrpc
+// HTTP/1.1` request made it try to JSON-parse the literal request bytes
+// and fail. A bare newline-terminated JSON-RPC line, sent directly with
+// no HTTP framing, is what this port (now `[tcp-control]`, its
+// conventional home) actually expects.
 //
 // Each zone (Snapclient) keeps its own Snapcast-assigned group -- there is
 // no Group.Create/Delete RPC, and this plugin never needs one: switching

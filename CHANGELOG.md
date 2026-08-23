@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Snapweb (the official Snapcast web client) — Snapserver's own
+  rename/group clients, per-client volume, and stream-switching UI,
+  which neither this plugin's own webapp nor Mopidy-MusicBox-Webclient
+  has. Installed as a prebuilt `.deb` (image/Dockerfile) and served by
+  Snapserver's own `[http]` section (`doc_root`). Confirmed by
+  build-testing that it can't share a port with Snapserver's control
+  API — an earlier draft that tried broke HTTP parsing for the shared
+  port entirely — so it's on its own dedicated port (`SNAPWEB_PORT`,
+  1780), with the control API moved to `[tcp-control]` at 1705 instead
+  (same wire protocol, no code change needed in
+  `src/snapserver-client.ts`). Reached directly on the LAN, same as
+  Mopidy-MusicBox-Webclient below, with a link in the config panel.
+
 ### Changed
 
 - Replaced the minimal built-in web UI (`image/webui`) with

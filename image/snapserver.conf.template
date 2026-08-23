@@ -22,17 +22,28 @@ source = pipe:///tmp/snapfifo?name=Jukebox&sampleformat=48000:16:2
 sandbox_dir = /app/sandbox
 
 [http]
-# Control API (src/snapserver-client.ts talks JSON-RPC over HTTP here, not
-# the legacy TCP JSON-RPC protocol below).
+# Snapweb (image/Dockerfile) lives here: this is Snapcast's genuinely
+# HTTP-capable server (real GET/POST + WS upgrade parsing, and the only
+# section `doc_root` actually works under). Confirmed by build-testing:
+# an earlier draft of this file put `[http]` on port 1705 to reuse it as
+# src/snapserver-client.ts's control connection too -- despite the
+# section's name, whatever's bound to 1705 in this Snapserver build does
+# NOT parse real HTTP at all (a plain GET made it try to JSON-parse the
+# request line itself and fail), so `doc_root` never actually served
+# anything there. Moved to Snapcast's own real default port (1780) instead
+# -- confirmed serving Snapweb's static files correctly once separated
+# from the control port below.
 enabled = true
 bind_to_address = 0.0.0.0
-port = 1705
+port = 1780
+doc_root = /usr/share/snapweb
 
-# The legacy TCP JSON-RPC control protocol ([tcp]/[tcp-control], both names
-# accepted) is disabled -- src/snapserver-client.ts only speaks HTTP, and
-# its default port (1705) collides with [http] above if left enabled.
+# The actual control API src/snapserver-client.ts talks to: raw
+# newline-terminated JSON-RPC over a plain TCP socket, not real HTTP
+# (confirmed by build-testing, see `[http]` above) -- re-enabled now that
+# `[http]` moved off this port and no longer collides with it.
 [tcp-control]
-enabled = false
+enabled = true
 
 # tcp-streaming (real audio delivery to snapclients, port 1704) is left at
 # its default -- confirmed via `snapserver -hh` that it's a distinct,

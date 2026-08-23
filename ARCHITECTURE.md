@@ -125,6 +125,13 @@ other directly) when a command arrives on its interface.
   (`container.ts`'s `ports`, `MOPIDY_PORT` bound to `0.0.0.0`) and the
   config panel links straight at that address — bypassing SignalK's own
   auth for that one connection, an accepted trade-off (§12).
+- Snapweb (Snapserver's own official web client, SPEC.md §7, §12) is
+  published the same way, for the same WS-proxying reason, at its own
+  `SNAPWEB_PORT` (1780) — deliberately NOT the same port as
+  `SNAPCAST_CONTROL_PORT` (1705), even though both are served by
+  Snapserver: confirmed by build-testing that putting Snapweb's `[http]`
+  section on the same port as the control API's `[tcp-control]` breaks
+  HTTP parsing for the shared port entirely (§12).
 - **Resolves its own address differently under `airplay.hostNetworking`
   (SPEC.md §12).** The normal path (`signalkAccessiblePorts` +
   `readiness`) can't be used there at all: confirmed against a real

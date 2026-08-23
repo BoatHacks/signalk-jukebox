@@ -659,6 +659,16 @@ all-zone fallback, volume duck, §2):**
   (§2.2 in ARCHITECTURE.md) — it's reached directly on the LAN at this
   host's own `MOPIDY_PORT`, bypassing SignalK's auth for that one
   connection. Swap back to Iris once it publishes a compatible release.
+- **Snapweb** (the official Snapcast web client) — Snapserver's own
+  rename/group clients, per-client volume, and stream-switching UI,
+  filling the zone-management gap neither webapp above has. Served by
+  Snapserver itself (its `[http]` section's `doc_root`, image/Dockerfile),
+  on a dedicated port (`SNAPWEB_PORT`, container.ts) separate from
+  Snapserver's own control API port — confirmed by build-testing that
+  putting both on the same port breaks HTTP parsing entirely for
+  whichever one shares it with the raw-socket control protocol (§12).
+  Reached directly on the LAN like Mopidy's own web client above, for the
+  same reason (no WS-proxying path through this plugin).
 - **SignalK Admin config panel** (this plugin, using
   `signalk-container-helper/ui` building blocks) — container status card,
   image-version dropdown + update controls, backend enable/disable
@@ -837,6 +847,27 @@ all-zone fallback, volume duck, §2):**
   once Iris publishes a Mopidy-4-compatible release — nothing about this
   plugin's own state store or interfaces depends on which web client is
   mounted.
+- **Snapweb over a custom zone-management UI** — same reasoning as Iris
+  above: Snapserver already ships an actively-maintained official web
+  client (rename/group clients, per-client volume, stream switching), so
+  building a competing one would duplicate it for no boat-specific
+  benefit. Installed as a prebuilt `.deb` (image/Dockerfile, matching how
+  Snapserver's own package is fetched — a specific pinned GitHub release,
+  not apt, which is stuck on an old Snapcast version), served via
+  Snapserver's own `[http]` section's `doc_root`. **Confirmed by
+  build-testing that it cannot share a port with Snapserver's control
+  API**: an earlier draft put both under `[http]` at 1705 (the control
+  port src/snapserver-client.ts already used) to save a port, and that
+  made the whole `[http]` listener behave like the raw-socket control
+  protocol instead of real HTTP — a plain `GET /index.html` made it try
+  to JSON-parse the request line itself and fail, so `doc_root` never
+  actually served anything. Fixed by giving `[http]` its own port
+  (`SNAPWEB_PORT`, Snapcast's own real default 1780) and moving the
+  control API to `[tcp-control]` at 1705 instead (the same raw-socket
+  wire protocol, so no code change needed in src/snapserver-client.ts).
+  Reached directly on the LAN (container.ts's `ports`), not
+  reverse-proxied, for the identical WS-proxying reason as Mopidy's own
+  web client above.
 - **Combined Mopidy+Snapserver image over two containers** — one
   `ManagedContainer` instance, one lifecycle, no inter-container network
   wiring to get wrong; matches the precedent set by signalk-wyoming's

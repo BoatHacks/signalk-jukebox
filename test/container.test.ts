@@ -5,6 +5,7 @@ import {
   MOPIDY_PORT,
   SNAPCAST_STREAM_PORT,
   SNAPCAST_CONTROL_PORT,
+  SNAPWEB_PORT,
 } from "../src/container.js";
 import { SCHEMA_DEFAULTS, type PluginSettings } from "../src/types.js";
 
@@ -28,6 +29,7 @@ describe("buildJukeboxConfig", () => {
     expect(config.ports).toEqual({
       [`${SNAPCAST_STREAM_PORT}/tcp`]: `0.0.0.0:${SNAPCAST_STREAM_PORT}`,
       [`${SNAPCAST_CONTROL_PORT}/tcp`]: `127.0.0.1:${SNAPCAST_CONTROL_PORT}`,
+      [`${SNAPWEB_PORT}/tcp`]: `0.0.0.0:${SNAPWEB_PORT}`,
       [`${MOPIDY_PORT}/tcp`]: `0.0.0.0:${MOPIDY_PORT}`,
     });
     expect(config.networkMode).toBeUndefined();

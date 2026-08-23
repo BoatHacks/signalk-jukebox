@@ -48,6 +48,7 @@
 FROM debian:trixie-slim AS base
 
 ARG SNAPCAST_VERSION=0.35.0
+ARG SNAPWEB_VERSION=0.9.3
 ARG TARGETARCH
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -93,6 +94,18 @@ RUN ARCH_SUFFIX="$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64")"
         "https://github.com/snapcast/snapcast/releases/download/v${SNAPCAST_VERSION}/snapserver_${SNAPCAST_VERSION}-1_${ARCH_SUFFIX}_trixie.deb" \
     && apt-get update && apt-get install -y --no-install-recommends /tmp/snapserver.deb \
     && rm -f /tmp/snapserver.deb && rm -rf /var/lib/apt/lists/*
+
+# --- Snapweb (official web GUI for Snapserver, ARCHITECTURE.md §2.4) ------
+# A prebuilt static app (architecture-independent `_all.deb`, unlike
+# Snapserver's own per-arch package above) -- confirmed against the actual
+# v0.9.3 release page. Installs to /usr/share/snapweb; snapserver.conf.
+# template's `[http]` section points `doc_root` there, so Snapserver serves
+# it itself alongside its own JSON-RPC control endpoint on the same port --
+# no separate web server or reverse proxy needed.
+RUN curl -fsSL -o /tmp/snapweb.deb \
+        "https://github.com/snapcast/snapweb/releases/download/v${SNAPWEB_VERSION}/snapweb_${SNAPWEB_VERSION}-1_all.deb" \
+    && apt-get update && apt-get install -y --no-install-recommends /tmp/snapweb.deb \
+    && rm -f /tmp/snapweb.deb && rm -rf /var/lib/apt/lists/*
 
 # --- shairport-sync (AirPlay receiver Snapserver's `airplay` stream type
 # spawns) -- confirmed available via trixie's own apt repo (4.3.7-1), well
