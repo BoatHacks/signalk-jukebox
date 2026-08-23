@@ -14,6 +14,20 @@
 # GStreamer pipeline actually emits.
 source = pipe:///tmp/snapfifo?name=Jukebox&sampleformat=48000:16:2
 
+# Announcement intake for other containers/processes (SPEC.md §6, §12) --
+# a second, independent stream a zone can be manually switched to (src/
+# routes.ts's /source endpoint, ALERTS_STREAM_ID) instead of muting the
+# whole Snapclient, so a zone that's off the jukebox can still hear
+# announcements. Snapcast's own `tcp server` source type (confirmed by
+# build-testing): Snapserver listens on ALERTS_PORT and accepts ONE
+# connection at a time, reading audio from whatever connects to it. Unlike
+# the `pipe://` source above, this wants a real WAV stream (RIFF/WAVE
+# header once, then raw PCM matching sampleformat) -- confirmed by
+# build-testing that a bare headerless PCM stream is NOT what this source
+# type expects (Snapcast's own docs' GStreamer example pipes through
+# `wavenc` for exactly this reason).
+source = tcp://0.0.0.0:4953?name=Alerts&sampleformat=48000:16:2&mode=server
+
 # Runtime-created airplay streams (Stream.AddStream) must reference an
 # executable inside this directory -- confirmed via research (SPEC.md
 # §13) this is Snapserver >= 0.33.0's replacement for the earlier

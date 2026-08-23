@@ -132,6 +132,19 @@ other directly) when a command arrives on its interface.
   Snapserver: confirmed by build-testing that putting Snapweb's `[http]`
   section on the same port as the control API's `[tcp-control]` breaks
   HTTP parsing for the shared port entirely (§12).
+- A second Snapcast stream, `"Alerts"` (`ALERTS_STREAM_ID`, container.ts),
+  is a standing announcement intake (Snapcast's `tcp server` source type,
+  `ALERTS_PORT` 4953) any other container/process can connect to and
+  stream a WAV-framed announcement into. A zone can be manually switched
+  onto it (`src/routes.ts`'s `/source` endpoint, alongside `"jukebox"`) —
+  added specifically so taking a zone off the jukebox stream doesn't
+  require muting its Snapclient outright, which would also silence
+  announcements meant for it (SPEC.md §12). `zone-sync.ts` derives
+  `activeSource` as `"alerts"` when a group's `stream_id` resolves to
+  this stream, same mechanism as the existing `"jukebox"`/`"airplay"`
+  cases. Published to the LAN the same way as `SNAPWEB_PORT`/`MOPIDY_PORT`
+  above (container.ts's `ports`) — not routed through this plugin's own
+  REST API at all, so any producer just needs a plain TCP connection.
 - **Resolves its own address differently under `airplay.hostNetworking`
   (SPEC.md §12).** The normal path (`signalkAccessiblePorts` +
   `readiness`) can't be used there at all: confirmed against a real

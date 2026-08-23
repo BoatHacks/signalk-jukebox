@@ -136,9 +136,9 @@ export const openApiDocument = {
     "/api/zones/{id}/source": {
       post: {
         tags: ["zones"],
-        summary: "Switch a zone back to the shared Jukebox stream",
+        summary: "Switch a zone between the Jukebox and Alerts streams",
         description:
-          'Only "jukebox" is accepted -- a zone\'s AirPlay stream is switched to automatically the moment a device connects (SPEC.md §6.4, §12: "connecting is the switch"), never selected manually, so there is nothing else for this route to apply.',
+          '"jukebox" (the shared music stream) or "alerts" (a standing announcement-intake stream other containers can feed, so a zone can be taken off the jukebox without muting its Snapclient entirely) -- "airplay" is NOT accepted: a zone\'s AirPlay stream is switched to automatically the moment a device connects (SPEC.md §6.4, §12: "connecting is the switch"), never selected manually.',
         parameters: [{ $ref: "#/components/parameters/ZoneId" }],
         requestBody: {
           required: true,
@@ -148,7 +148,7 @@ export const openApiDocument = {
                 type: "object",
                 required: ["source"],
                 properties: {
-                  source: { type: "string", enum: ["jukebox"] },
+                  source: { type: "string", enum: ["jukebox", "alerts"] },
                 },
               },
             },

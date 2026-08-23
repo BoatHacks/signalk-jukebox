@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- A second Snapcast stream, "Alerts" — a standing announcement intake
+  (Snapcast's `tcp server` source type, port 4953) any other container or
+  process can connect to and stream a WAV-framed announcement into. The
+  webapp's per-zone "Play here" toggle now switches a zone to this
+  stream when turned off, instead of muting the whole Snapclient — a
+  zone taken off the jukebox stream still hears announcements meant for
+  it. `POST /api/zones/:id/source` now accepts `"alerts"` alongside the
+  existing `"jukebox"`. Reached directly at its own LAN-published port,
+  not through this plugin's REST API, so any producer just needs a plain
+  TCP connection.
 - Snapweb (the official Snapcast web client) — Snapserver's own
   rename/group clients, per-client volume, and stream-switching UI,
   which neither this plugin's own webapp nor Mopidy-MusicBox-Webclient

@@ -29,6 +29,15 @@ export const SNAPCAST_CONTROL_PORT = 1705;
  * port made the real one behave like the raw one (no HTTP parsing, no
  * static files) -- see snapserver.conf.template's own note. */
 export const SNAPWEB_PORT = 1780;
+/** Announcement intake stream (snapserver.conf.template's `[stream]`
+ * section, `tcp server` source type, ALERTS_STREAM_ID = "Alerts") -- any
+ * other container/process can connect here and stream a WAV-framed
+ * announcement, and a zone can be manually switched onto it (src/
+ * routes.ts's /source endpoint) instead of being muted entirely, so it
+ * stays reachable for announcements while off the jukebox stream.
+ * Snapcast's own real default port for this source type. */
+export const ALERTS_PORT = 4953;
+export const ALERTS_STREAM_ID = "Alerts";
 
 /** The container's address once `airplay.hostNetworking` is on: sharing
  * the host's network namespace directly means Mopidy's port literally
@@ -111,6 +120,12 @@ export function buildJukeboxConfig(
     // explicitly, after confirming signalk-server's plugin API, the
     // loopback-only signalkAccessiblePorts mechanism, and this plugin's
     // own reverse proxy all have no WS-proxying path.
+    //
+    // ALERTS_PORT is bound to every interface for a different reason:
+    // it's an intentional intake, meant to be reachable by other
+    // containers/processes wanting to stream an announcement in (its own
+    // comment, and SNAPWEB_PORT's above, cover why Snapcast's ports have
+    // no auth to lose either way).
     // `ports` is ignored once `networkMode` is set (signalk-container-
     // helper's own type docs), so only declare it when NOT using host
     // networking; under host networking every port here is already the
@@ -121,6 +136,7 @@ export function buildJukeboxConfig(
           [`${SNAPCAST_STREAM_PORT}/tcp`]: `0.0.0.0:${SNAPCAST_STREAM_PORT}`,
           [`${SNAPCAST_CONTROL_PORT}/tcp`]: `127.0.0.1:${SNAPCAST_CONTROL_PORT}`,
           [`${SNAPWEB_PORT}/tcp`]: `0.0.0.0:${SNAPWEB_PORT}`,
+          [`${ALERTS_PORT}/tcp`]: `0.0.0.0:${ALERTS_PORT}`,
           [`${MOPIDY_PORT}/tcp`]: `0.0.0.0:${MOPIDY_PORT}`,
         },
     // AirPlay discovery (mDNS) and each per-zone receiver's own

@@ -9,10 +9,15 @@ import type { SnapserverClient } from "./snapserver-client.js";
 //
 // "Jukebox" is the fixed stream id the shared Mopidy-backed stream always
 // uses (snapserver.conf.template's `source = pipe://...?name=Jukebox&...`);
-// anything else a group's stream_id resolves to is that zone's own
-// per-connection AirPlay stream (SPEC.md §6.4).
+// "Alerts" is the fixed stream id the announcement-intake stream always
+// uses (same file's `source = tcp://...?name=Alerts&...`, container.ts's
+// ALERTS_STREAM_ID) -- a zone manually switched there (src/routes.ts's
+// /source endpoint) still hears announcements without being muted
+// entirely. Anything else a group's stream_id resolves to is that zone's
+// own per-connection AirPlay stream (SPEC.md §6.4).
 
 const JUKEBOX_STREAM_ID = "Jukebox";
+const ALERTS_STREAM_ID = "Alerts";
 const DEFAULT_INTERVAL_MS = 2000;
 
 export function startZoneSync(
@@ -39,7 +44,11 @@ export function startZoneSync(
             volume: client.volume,
             muted: client.muted,
             activeSource:
-              group.streamId === JUKEBOX_STREAM_ID ? "jukebox" : "airplay",
+              group.streamId === JUKEBOX_STREAM_ID
+                ? "jukebox"
+                : group.streamId === ALERTS_STREAM_ID
+                  ? "alerts"
+                  : "airplay",
             n2kZone: existing?.n2kZone,
             airplay: existing?.airplay,
           });

@@ -292,7 +292,7 @@ copy.
   (§3.2). `volume`/`muted` here are the _master_ volume (pre-zone), used
   for Fusion-Link's own volume model (§6.3); per-zone volume is separate
   (`Zone.volume` below).
-- **Zone** — `{ id, name, connected: boolean, volume: number (0-100), muted: boolean, n2kZone?: number, activeSource: 'jukebox'|'airplay', airplay?: { streamName, connected: boolean, track?: { title, artist?, album? } } }`
+- **Zone** — `{ id, name, connected: boolean, volume: number (0-100), muted: boolean, n2kZone?: number, activeSource: 'jukebox'|'alerts'|'airplay', airplay?: { streamName, connected: boolean, track?: { title, artist?, album? } } }`
   — `id` is the Snapclient's Snapcast-assigned id; `name` is whatever the
   Snapclient reports (typically its hostname) unless overridden. `n2kZone`
   (0–3) is present only for zones assigned an N2K/Fusion slot (§2, §8);
@@ -868,6 +868,22 @@ all-zone fallback, volume duck, §2):**
   Reached directly on the LAN (container.ts's `ports`), not
   reverse-proxied, for the identical WS-proxying reason as Mopidy's own
   web client above.
+- **A separate "Alerts" Snapcast stream, not muting the Snapclient, for
+  taking a zone off the jukebox stream** — the webapp's per-zone "Play
+  here" toggle originally muted the whole zone when switched off, which
+  also silenced any announcement meant for it. Snapcast's own `tcp server`
+  source type (`ALERTS_PORT` 4953, its own real default) is a standing
+  intake any other container/process can connect to and stream a
+  WAV-framed announcement into (confirmed by build-testing: this source
+  type wants a real RIFF/WAVE header once, then raw PCM matching
+  `sampleformat` -- a bare headerless PCM stream, which the existing
+  `pipe://` Jukebox source expects instead, is NOT accepted here). A zone
+  switched to `alerts` (`routes.ts`'s `/source` endpoint, alongside the
+  existing `jukebox`) still hears whatever's playing on that stream while
+  off the jukebox one. Reached at its own LAN-published `ALERTS_PORT`
+  (container.ts's `ports`) -- deliberately not routed through this
+  plugin's REST API, so any producer just needs a TCP connection, no
+  SignalK-specific integration.
 - **Combined Mopidy+Snapserver image over two containers** — one
   `ManagedContainer` instance, one lifecycle, no inter-container network
   wiring to get wrong; matches the precedent set by signalk-wyoming's

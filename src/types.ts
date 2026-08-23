@@ -24,7 +24,7 @@ export interface PlaybackState {
   muted: boolean;
 }
 
-export type ZoneActiveSource = "jukebox" | "airplay";
+export type ZoneActiveSource = "jukebox" | "alerts" | "airplay";
 
 export interface AirPlayTrack {
   title: string;

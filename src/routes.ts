@@ -40,6 +40,7 @@ export interface RegisterRoutesArgs {
 }
 
 const JUKEBOX_STREAM_ID = "Jukebox";
+const ALERTS_STREAM_ID = "Alerts";
 
 export function registerRoutes({
   router,
@@ -121,10 +122,14 @@ export function registerRoutes({
   });
 
   // Which source plays in this zone (the web UI's zone/source picker).
-  // Only "jukebox" is settable here -- a zone's AirPlay stream is switched
+  // "jukebox" and "alerts" are settable here -- "alerts" (container.ts's
+  // ALERTS_STREAM_ID, a standing announcement-intake stream, SPEC.md §6,
+  // §12) is how a zone can be taken off the jukebox stream without
+  // muting the Snapclient outright, so it still hears announcements.
+  // "airplay" is NOT settable here -- a zone's AirPlay stream is switched
   // to automatically on connect (SPEC.md §6.4, §12: "connecting is the
-  // switch"), never chosen manually, so there is nothing for this route to
-  // apply if asked for "airplay".
+  // switch"), never chosen manually, so there is nothing for this route
+  // to apply if asked for it.
   router.post("/api/zones/:id/source", (rawReq, res) => {
     const req = rawReq as ExpressLikeRequest;
     const zone = store.getZone(req.params.id);
@@ -137,14 +142,15 @@ export function registerRoutes({
       return;
     }
     const source = req.body?.source;
-    if (source !== "jukebox") {
-      res.status(400).json({ error: 'source must be "jukebox"' });
+    if (source !== "jukebox" && source !== "alerts") {
+      res.status(400).json({ error: 'source must be "jukebox" or "alerts"' });
       return;
     }
+    const streamId = source === "jukebox" ? JUKEBOX_STREAM_ID : ALERTS_STREAM_ID;
     snapserver.client
-      .setGroupStream(zone.groupId, JUKEBOX_STREAM_ID)
+      .setGroupStream(zone.groupId, streamId)
       .then(() => {
-        store.setZone({ ...zone, activeSource: "jukebox" });
+        store.setZone({ ...zone, activeSource: source });
         res.json({ ok: true });
       })
       .catch((err: unknown) => {
