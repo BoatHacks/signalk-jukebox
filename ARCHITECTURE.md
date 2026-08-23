@@ -273,6 +273,49 @@ Not part of this repo. Any Snapcast-compatible client on the boat LAN
 that connects to this container's Snapserver becomes a zone automatically
 (SPEC.md §2 — read-only discovery, no manual provisioning).
 
+### 2.7 Playback-control adapter (`src/controls.ts`)
+
+- Subscribes to four `entertainment.jukebox.playback.controls.*` paths
+  (SPEC.md §6.2) via `app.streambundle`, the same subscription mechanism
+  §2.5's duck-trigger adapter uses — but the reverse role: this is the
+  *consumer* of momentary pushbutton input (an NMEA2000 switch via
+  another plugin, a webapp button, anything that can publish a delta),
+  not a publisher of canonical state.
+- Edge-detects each path's own last-seen value and calls the matching
+  `MopidyClient` method (`play`/`pause`/`next`/`previous`) only on a
+  `0/false -> 1/true` transition; release and any repeated `1` without an
+  intervening release are no-ops, so a source that periodically republishes
+  its current value can't double-fire an action.
+- Started/stopped alongside the main container in `index.ts` (constructs
+  its own `MopidyClient` against the container's resolved address once
+  `start()` completes, same pattern as `SnapserverClient`/`zone-sync.ts`);
+  unsubscribes on plugin `stop()`.
+
+### 2.8 PUT-handler adapter (`src/put-handlers.ts`)
+
+- Implements the "PUT-able" paths §6.2's table already documented
+  (`playback.volume`, `zones.<id>.volume`, `zones.<id>.muted`) via
+  `app.registerPutHandler` — a PUT is just another way to reach the same
+  canonical-state write path routes.ts's REST routes use, calling the
+  same `MopidyClient.setVolume`/`SnapserverClient.setClientVolume` and
+  writing the confirmed result into the store, not applied optimistically.
+- `playback.volume` is registered once, synchronously, in `start()` — it
+  doesn't need a container instance to exist yet, only a `MopidyClient` to
+  call once one does, so the handler itself holds a mutable
+  `MopidyClientState` box (same pattern as `proxy.ts`'s `MopidyProxyState`)
+  and 503s "container not ready yet" until `start()`'s `startSafely` block
+  fills it in.
+- `zones.<id>.volume`/`.muted` can't be registered up front the same way:
+  `registerPutHandler` takes one exact literal path per call, and zone ids
+  aren't known until Snapserver reports them. Instead, this adapter
+  subscribes to the canonical store's own "zone" change event (the same
+  event `paths.ts` publishes from) and registers both paths for a zone id
+  the first time it's seen, tracked in-memory so the 2s zone-sync poll —
+  which calls `setZone` every tick regardless of whether anything actually
+  changed — doesn't attempt the same registration repeatedly. There is no
+  `unregisterPutHandler` in the SignalK plugin API, so a zone that
+  disappears just leaves an inert, harmless handler behind for its old id.
+
 ## 3. Data Models
 
 See SPEC.md §4 for the conceptual shapes (`PlaybackState`, `Zone`,
@@ -477,6 +520,8 @@ signalk-jukebox/
 │   │   └── voice.ts            # voice.satellites.*.state -> zone volume duck/restore (§2.5, SPEC.md §6.5)
 │   ├── routes.ts              # /api/* Express routes
 │   ├── paths.ts                # entertainment.* SK path publishing
+│   ├── controls.ts             # entertainment.jukebox.playback.controls.* -> Mopidy play/pause/next/previous (§2.7, SPEC.md §6.2)
+│   ├── put-handlers.ts         # PUT handling for playback.volume / zones.<id>.volume/muted (§2.8, SPEC.md §6.2)
 │   ├── configpanel/            # React admin panel (signalk-container-helper/ui)
 │   └── types.ts
 ├── image/                     # the custom Mopidy+Snapserver+webui container image (build-tested, §2.4)

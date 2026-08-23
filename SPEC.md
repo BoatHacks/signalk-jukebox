@@ -410,6 +410,26 @@ regardless of which interface caused it:
 These exist so other plugins/instruments can show "now playing" or react
 to it; there is no other consumer identified yet (§13).
 
+**Playback control inputs** — the reverse direction from the table above:
+these paths are *consumed*, not published, by this plugin. An external
+source (an NMEA2000 momentary switch via another plugin, a webapp button,
+anything that can publish a SignalK delta) sends `1` on press and `0` on
+release; this plugin fires the matching Mopidy action on every `0 -> 1`
+transition and ignores release and any repeated `1` sent without an
+intervening release (`src/controls.ts`, subscribed via
+`app.streambundle.getSelfStream`, the same mechanism §6.5's duck triggers
+use):
+
+| Path                                              | Value                          |
+| -------------------------------------------------- | ------------------------------- |
+| `entertainment.jukebox.playback.controls.play`     | `0\|1`, momentary, press-edge   |
+| `entertainment.jukebox.playback.controls.pause`    | `0\|1`, momentary, press-edge   |
+| `entertainment.jukebox.playback.controls.next`     | `0\|1`, momentary, press-edge   |
+| `entertainment.jukebox.playback.controls.previous` | `0\|1`, momentary, press-edge   |
+
+Not PUT-able (there is nothing to read back — a momentary control has no
+resting state worth exposing) and not published by `paths.ts`.
+
 ### 6.3 NMEA2000 / Fusion-Link Interface
 
 Enabled/configured via §9. Two protocol surfaces, both reading and

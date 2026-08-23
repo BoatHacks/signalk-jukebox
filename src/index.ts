@@ -15,6 +15,14 @@ import { SnapserverClient } from "./snapserver-client.js";
 import { startZoneSync } from "./zone-sync.js";
 import { createLocalSnapclient } from "./local-snapclient.js";
 import { publishStateChanges, type AppLike } from "./paths.js";
+import { MopidyClient } from "./mopidy-client.js";
+import { registerPlaybackControls, type ControlsAppLike } from "./controls.js";
+import {
+  registerPlaybackVolumePutHandler,
+  registerZonePutHandlers,
+  type MopidyClientState,
+  type PutHandlerAppLike,
+} from "./put-handlers.js";
 import {
   SCHEMA_DEFAULTS,
   mergeSettings,
@@ -27,8 +35,9 @@ import {
 // mostly wiring -- the real logic lives in state/store.ts,
 // container.ts, mopidy-client.ts, snapserver-client.ts, n2k/*, airplay/*.
 
-interface App extends AppLike {
+interface App extends AppLike, ControlsAppLike, PutHandlerAppLike {
   debug(msg: string): void;
+  error(msg: string): void;
   getDataDirPath(): string;
   setPluginStatus(msg: string): void;
   setPluginError(msg: string): void;
@@ -42,11 +51,17 @@ export default function plugin(app: App) {
   const store = new StateStore(createInitialState());
   let unpublish: (() => void) | null = null;
   let stopZoneSync: (() => void) | null = null;
+  let stopPlaybackControls: (() => void) | null = null;
+  let stopZonePutHandlers: (() => void) | null = null;
   // Filled in once container.start() resolves an address (registerWithRouter
   // runs synchronously before that) -- see proxy.ts.
   const proxyState: MopidyProxyState = { address: null };
   // Same pattern, for routes.ts's zone volume/mute/source writes.
   const snapserverState: SnapserverClientState = { client: null };
+  // Same pattern again, for put-handlers.ts's playback.volume PUT --
+  // registerPlaybackVolumePutHandler runs synchronously in start(), well
+  // before container.start() resolves a real MopidyClient to call.
+  const mopidyState: MopidyClientState = { client: null };
 
   const jukebox = {
     id: "signalk-jukebox",
@@ -58,6 +73,13 @@ export default function plugin(app: App) {
     start(rawConfig: Partial<PluginSettings>) {
       settings = mergeSettings(rawConfig);
       unpublish = publishStateChanges(app, jukebox.id, store);
+      // Registered up front, not inside startSafely below: registerPutHandler
+      // is a plain app-level registration (like registerWithRouter), not
+      // something that needs the container running -- each handler's own
+      // "container not ready yet" guard (mopidyState.client /
+      // snapserverState.client) covers the gap until it is.
+      registerPlaybackVolumePutHandler(app, mopidyState, store);
+      stopZonePutHandlers = registerZonePutHandlers(app, snapserverState, store);
 
       startSafely(app, async () => {
         let libraryMount: { source: string; containerPath: string } | undefined;
@@ -94,6 +116,14 @@ export default function plugin(app: App) {
         snapserverState.client = snapserverClient;
         stopZoneSync = startZoneSync(store, snapserverClient);
 
+        // address is non-null here: readiness IS configured (container.ts),
+        // so a resolved start() always carries one (StartResult's doc
+        // comment) -- guarded anyway since the type is nullable.
+        if (address) {
+          mopidyState.client = new MopidyClient({ baseUrl: address });
+          stopPlaybackControls = registerPlaybackControls(app, mopidyState.client);
+        }
+
         // TODO(implementation): wire up mopidy-client.ts's polling loop
         // that feeds playback state into the StateStore -- zones are
         // covered now (zone-sync.ts), playback isn't yet.
@@ -127,7 +157,12 @@ export default function plugin(app: App) {
       unpublish = null;
       stopZoneSync?.();
       stopZoneSync = null;
+      stopPlaybackControls?.();
+      stopPlaybackControls = null;
+      stopZonePutHandlers?.();
+      stopZonePutHandlers = null;
       snapserverState.client = null;
+      mopidyState.client = null;
       proxyState.address = null;
       await container?.stop(); // unregister updates + stop, never throws
       await localSnapclient?.stop();

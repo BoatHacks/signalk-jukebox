@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.0.2] - 2026-08-23
+
+### Added
+
+- Four momentary playback-control SignalK paths,
+  `entertainment.jukebox.playback.controls.{play,pause,next,previous}`,
+  for mapping a physical pushbutton (or any delta source) to playback
+  control: send `1` on press, `0` on release; the plugin fires the
+  matching action on each press edge.
+- PUT handlers for `playback.volume`, `zones.<id>.volume`, and
+  `zones.<id>.muted` — these paths were documented as "PUT-able" since
+  the first release but nothing actually implemented `registerPutHandler`
+  for them; they only ever worked via the REST API.
+
+### Fixed
+
+- Config panel crash (`Cannot read properties of undefined (reading
+  'enabled')`) on a partially-populated saved config, e.g. one saved
+  before a later settings group was added.
+
 ## [0.0.1] - 2026-08-22
 
 First release. Containerized whole-boat music playback for SignalK:
