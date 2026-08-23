@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.0.9] - 2026-08-23
+
+### Fixed
+
+- Config panel's status card permanently showed "stopped" regardless of
+  actual playback, since nothing ever wrote real state into the
+  canonical store — `mopidy-client.ts` had the RPC calls but no poll
+  loop was ever wired up (a standing TODO). Confirmed via a real user
+  report: the status card said "stopped" while SignalK's own native
+  plugin-status line correctly showed the container running — two
+  different questions ("is music playing" vs. "is the container up")
+  that looked like a contradiction. New `playback-sync.ts` (same polling
+  pattern `zone-sync.ts` already used for Snapserver) keeps
+  state/track/volume/mute in sync with Mopidy's real state every 2s.
+  Also new: `MopidyClient.getCurrentTrack()`/`getMute()`.
+
 ## [0.0.8] - 2026-08-23
 
 ### Changed

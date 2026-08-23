@@ -17,6 +17,7 @@ import {
 import { registerMopidyProxy, type MopidyProxyState } from "./proxy.js";
 import { SnapserverClient } from "./snapserver-client.js";
 import { startZoneSync } from "./zone-sync.js";
+import { startPlaybackSync } from "./playback-sync.js";
 import {
   createLocalSnapclient,
   renameLocalSnapclientZone,
@@ -43,10 +44,7 @@ import {
 // container.ts, mopidy-client.ts, snapserver-client.ts, n2k/*, airplay/*.
 
 interface App
-  extends AppLike,
-    ControlsAppLike,
-    PutHandlerAppLike,
-    SatellitesAppLike {
+  extends AppLike, ControlsAppLike, PutHandlerAppLike, SatellitesAppLike {
   debug(msg: string): void;
   error(msg: string): void;
   getDataDirPath(): string;
@@ -65,6 +63,7 @@ export default function plugin(app: App) {
   let stopPlaybackControls: (() => void) | null = null;
   let stopZonePutHandlers: (() => void) | null = null;
   let stopLocalSnapclientRename: (() => void) | null = null;
+  let stopPlaybackSync: (() => void) | null = null;
   // Filled in once container.start() resolves an address (registerWithRouter
   // runs synchronously before that) -- see proxy.ts.
   const proxyState: MopidyProxyState = { address: null };
@@ -91,7 +90,11 @@ export default function plugin(app: App) {
       // "container not ready yet" guard (mopidyState.client /
       // snapserverState.client) covers the gap until it is.
       registerPlaybackVolumePutHandler(app, mopidyState, store);
-      stopZonePutHandlers = registerZonePutHandlers(app, snapserverState, store);
+      stopZonePutHandlers = registerZonePutHandlers(
+        app,
+        snapserverState,
+        store,
+      );
 
       startSafely(app, async () => {
         let libraryMount: { source: string; containerPath: string } | undefined;
@@ -146,12 +149,12 @@ export default function plugin(app: App) {
         // comment) -- guarded anyway since the type is nullable.
         if (address) {
           mopidyState.client = new MopidyClient({ baseUrl: address });
-          stopPlaybackControls = registerPlaybackControls(app, mopidyState.client);
+          stopPlaybackControls = registerPlaybackControls(
+            app,
+            mopidyState.client,
+          );
+          stopPlaybackSync = startPlaybackSync(store, mopidyState.client);
         }
-
-        // TODO(implementation): wire up mopidy-client.ts's polling loop
-        // that feeds playback state into the StateStore -- zones are
-        // covered now (zone-sync.ts), playback isn't yet.
 
         // TODO(implementation): if settings.n2k.enabled, construct
         // FusionAdapter/EntertainmentPgnAdapter (n2k/fusion.ts,
@@ -184,6 +187,8 @@ export default function plugin(app: App) {
       stopZoneSync = null;
       stopPlaybackControls?.();
       stopPlaybackControls = null;
+      stopPlaybackSync?.();
+      stopPlaybackSync = null;
       stopZonePutHandlers?.();
       stopZonePutHandlers = null;
       stopLocalSnapclientRename?.();

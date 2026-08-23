@@ -114,13 +114,22 @@ other directly) when a command arrives on its interface.
   the minimal built-in UI, Iris once compatible (SPEC.md §7, §12) — at a
   plugin-owned path, so the browser never needs to know the container's
   internal port.
-- Subscribes to Mopidy's JSON-RPC event stream (not just polling) for
-  playback state, writing every change into the canonical store (§2.1);
-  applies canonical-store writes that originated elsewhere (N2K, REST) to
-  Mopidy via the same JSON-RPC API.
+- Polls Mopidy's JSON-RPC API (`playback-sync.ts`, same pattern
+  `zone-sync.ts` uses for Snapserver) for playback state/track/volume/
+  mute, writing every change into the canonical store (§2.1) --
+  confirmed by a real user report that without this, the store's
+  playback state never left its "stopped" startup default no matter
+  what was actually playing, since nothing else ever wrote to it.
+  Mopidy's own WS event-stream endpoint (`/mopidy/ws`) would push
+  changes instead of polling for them, but isn't proxied or connected
+  to yet (`mopidy-client.ts`, `proxy.ts`'s own doc comment) -- polling
+  every 2s is the interim substitute. Applies canonical-store writes
+  that originated elsewhere (N2K, REST) to Mopidy via the same
+  JSON-RPC API.
 - Periodically snapshots the tracklist/position for restart persistence
   (SPEC.md §8), and restores it into Mopidy on the next container start
-  before the store is considered "ready."
+  before the store is considered "ready." (Not yet implemented --
+  tracked as a TODO in `mopidy-client.ts`.)
 - Polls Snapserver's JSON-RPC control API for connected clients and
   their volume/mute, writing zone state into the canonical store;
   applies zone volume/mute writes that originated elsewhere to Snapserver
@@ -278,7 +287,7 @@ that connects to this container's Snapserver becomes a zone automatically
 - Subscribes to four `entertainment.jukebox.playback.controls.*` paths
   (SPEC.md §6.2) via `app.streambundle`, the same subscription mechanism
   §2.5's duck-trigger adapter uses — but the reverse role: this is the
-  *consumer* of momentary pushbutton input (an NMEA2000 switch via
+  _consumer_ of momentary pushbutton input (an NMEA2000 switch via
   another plugin, a webapp button, anything that can publish a delta),
   not a publisher of canonical state.
 - Edge-detects each path's own last-seen value and calls the matching
@@ -516,6 +525,7 @@ signalk-jukebox/
 │   ├── snapserver-client.ts   # JSON-RPC client: zone list, volume/mute
 │   ├── proxy.ts                # reverse-proxies the plugin's router path to the running container (§2.2)
 │   ├── zone-sync.ts            # polls Snapserver, keeps the canonical store's zones in sync (§2.2)
+│   ├── playback-sync.ts        # polls Mopidy, keeps the canonical store's playback state in sync (§2.2)
 │   ├── local-snapclient.ts     # optional 2nd ManagedContainer: a Snapclient zone on this host's own sound card (§12)
 │   ├── n2k/
 │   │   ├── fusion.ts          # Fusion-Link encode/decode + address claiming

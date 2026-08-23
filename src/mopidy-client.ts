@@ -2,9 +2,21 @@
 // its core API over JSON-RPC 2.0 at POST /mopidy/rpc; TODO(implementation):
 // the event-stream subscription (core.playback state changes, volume
 // changes) uses Mopidy's separate WebSocket endpoint
-// (ws://<host>/mopidy/ws), not implemented here yet -- this file currently
-// only covers request/response calls (SPEC.md §3.2's "confirmed via
-// Mopidy's own event stream" still needs that WS connection wired in).
+// (ws://<host>/mopidy/ws), not implemented here yet -- playback-sync.ts
+// instead polls this request/response API on a timer (same pattern
+// zone-sync.ts uses for Snapserver), not real push events.
+
+/** Mopidy's own Track model shape (core.playback.get_current_track),
+ * confirmed against a real running Mopidy 4.x instance -- `artists` is
+ * always an array (possibly empty, e.g. an internet radio stream with no
+ * tagged artist), `album` is the object or `null`, not omitted. */
+export interface MopidyTrack {
+  uri: string;
+  name: string;
+  artists: { name: string }[];
+  album: { name: string } | null;
+  length: number | null;
+}
 
 export interface MopidyClientOptions {
   baseUrl: string; // e.g. http://127.0.0.1:6680
@@ -56,6 +68,14 @@ export class MopidyClient {
 
   setVolume(volume: number): Promise<boolean> {
     return this.call("core.mixer.set_volume", { volume });
+  }
+
+  getMute(): Promise<boolean> {
+    return this.call("core.mixer.get_mute");
+  }
+
+  getCurrentTrack(): Promise<MopidyTrack | null> {
+    return this.call("core.playback.get_current_track");
   }
 
   play(): Promise<void> {
