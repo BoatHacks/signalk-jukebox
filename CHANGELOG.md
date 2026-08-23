@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.0.12] - 2026-08-23
+
+### Added
+
+- Real OpenAPI 3.0.3 documentation (`src/openapi.ts`) for every REST
+  endpoint the plugin presents, exposed via the standard
+  `plugin.getOpenApi` hook so it shows up in the server's own OpenAPI
+  explorer alongside every other plugin's API.
+
 ## [0.0.11] - 2026-08-23
 
 ### Fixed

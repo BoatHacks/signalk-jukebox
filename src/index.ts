@@ -41,6 +41,7 @@ import {
   mergeSettings,
   type PluginSettings,
 } from "./types.js";
+import { openApiDocument } from "./openapi.js";
 
 // Plugin entry point, following the ManagedContainer archetype
 // (signalk-container-helper README "Quick start: a managed container").
@@ -243,6 +244,13 @@ export default function plugin(app: App) {
       // above (proxy.ts).
       registerMopidyProxy(router, proxyState);
     },
+
+    // Standard SignalK plugin hook (@signalk/server-api's Plugin
+    // interface) -- documents this plugin's REST API (SPEC.md §6.1) in
+    // the server's own OpenAPI explorer alongside every other plugin's
+    // API, per its own doc comment recommending this for any plugin that
+    // provides one.
+    getOpenApi: () => openApiDocument,
 
     schema: () => ({
       type: "object",

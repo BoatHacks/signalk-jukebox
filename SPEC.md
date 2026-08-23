@@ -387,6 +387,15 @@ Actual playback control (play/pause/skip/queue/search) goes through the
 web client (§7) directly against Mopidy's own HTTP/JSON-RPC API — this
 plugin does not proxy or re-implement it.
 
+All of the above (plus `registerUpdateRoutes`' two routes) are documented
+as a real OpenAPI 3.0.3 document (`src/openapi.ts`), exposed via the
+standard SignalK plugin hook `plugin.getOpenApi` — the server's own
+OpenAPI explorer surfaces it alongside every other plugin's API, per
+that hook's own doc comment recommending this for any plugin that
+provides one. `test/openapi.test.ts` checks every path this plugin
+actually registers is present and every `$ref` resolves, since the
+document is hand-written, not generated from `routes.ts`.
+
 ### 6.2 SignalK Paths / Events
 
 Under `vessels.self`, a custom `entertainment.*` branch (outside the
