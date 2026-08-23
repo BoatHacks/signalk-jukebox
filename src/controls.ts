@@ -70,10 +70,7 @@ export function registerPlaybackControls(
   };
 
   const unsubscribers = (
-    Object.entries(actions) as [
-      PlaybackControlAction,
-      () => Promise<void>,
-    ][]
+    Object.entries(actions) as [PlaybackControlAction, () => Promise<void>][]
   ).map(([action, run]) => {
     let lastPressed = false;
     return app.streambundle

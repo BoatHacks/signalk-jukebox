@@ -7,6 +7,7 @@ import {
   createManagedContainer,
   MOPIDY_PORT,
   SNAPCAST_CONTROL_PORT,
+  HOST_NETWORKING_ADDRESS,
 } from "./container.js";
 import { StateStore, createInitialState } from "./state/store.js";
 import {
@@ -118,7 +119,18 @@ export default function plugin(app: App) {
         }
 
         container = createManagedContainer({ app, settings, libraryMount });
-        const { address } = await container.start(settings.imageTag);
+        const { address: resolvedAddress } = await container.start(
+          settings.imageTag,
+        );
+        // Under host networking, container.ts omits `readiness` entirely
+        // (its own address resolution can't work there -- see that file's
+        // doc comment), so `resolvedAddress` is always null in that mode.
+        // Substitute the deterministic address instead: sharing the
+        // host's network namespace means Mopidy's port simply IS this
+        // host's own port, nothing to resolve.
+        const address = settings.airplay.hostNetworking
+          ? HOST_NETWORKING_ADDRESS
+          : resolvedAddress;
         proxyState.address = address;
 
         // Snapserver's control port is published loopback-only
@@ -144,9 +156,10 @@ export default function plugin(app: App) {
           );
         }
 
-        // address is non-null here: readiness IS configured (container.ts),
-        // so a resolved start() always carries one (StartResult's doc
-        // comment) -- guarded anyway since the type is nullable.
+        // address is non-null here either way: readiness resolves one when
+        // configured (the normal case), and HOST_NETWORKING_ADDRESS is a
+        // fixed literal otherwise -- guarded anyway since the type is
+        // nullable.
         if (address) {
           mopidyState.client = new MopidyClient({ baseUrl: address });
           stopPlaybackControls = registerPlaybackControls(

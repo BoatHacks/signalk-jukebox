@@ -65,7 +65,7 @@ export function registerRoutes({
     const satellites = app.getSelfPath("voice.satellites");
     const ids =
       satellites && typeof satellites === "object"
-        ? Object.keys(satellites as Record<string, unknown>)
+        ? Object.keys(satellites)
         : [];
     res.json({ ids });
   });

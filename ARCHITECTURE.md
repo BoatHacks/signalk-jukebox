@@ -114,6 +114,22 @@ other directly) when a command arrives on its interface.
   the minimal built-in UI, Iris once compatible (SPEC.md §7, §12) — at a
   plugin-owned path, so the browser never needs to know the container's
   internal port.
+- **Resolves its own address differently under `airplay.hostNetworking`
+  (SPEC.md §12).** The normal path (`signalkAccessiblePorts` +
+  `readiness`) can't be used there at all: confirmed against a real
+  production instance that signalk-container discards `networkMode:
+"host"` outright the moment `signalkAccessiblePorts` is also set,
+  silently reverting to bridge mode — which meant this container ran in
+  bridge mode even with host networking supposedly on, while `ports`
+  was _also_ omitted (since the code assumed host networking was really
+  applying), leaving Snapcast completely unpublished either way. Fixed
+  by omitting both `signalkAccessiblePorts` and `readiness` under host
+  networking (the latter depends on the former for address resolution,
+  and a real host-networking container publishes no parseable ports at
+  all for the fallback path either) and substituting a hardcoded
+  `HOST_NETWORKING_ADDRESS` (`container.ts`) instead: sharing the
+  host's network namespace makes Mopidy's port simply _be_ the host's
+  own port, nothing left to resolve.
 - Polls Mopidy's JSON-RPC API (`playback-sync.ts`, same pattern
   `zone-sync.ts` uses for Snapserver) for playback state/track/volume/
   mute, writing every change into the canonical store (§2.1) --

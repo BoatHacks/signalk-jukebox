@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.0.10] - 2026-08-23
+
+### Fixed
+
+- Snapcast completely unreachable (no zones, local snapclient stuck in a
+  connection-refused reconnect loop) on any install with
+  `airplay.hostNetworking` enabled. Root cause, confirmed against a real
+  production instance: `signalkAccessiblePorts` and `networkMode: "host"`
+  cannot be combined — signalk-container discards `networkMode` entirely
+  the moment `signalkAccessiblePorts` is also set (its own log warning
+  names the conflict), silently reverting to bridge mode. Since
+  `container.ts` also omits `ports` whenever host networking is
+  requested (correctly assuming it would actually apply), the container
+  ended up in bridge mode with neither publishing mechanism active at
+  all. Fixed by omitting `signalkAccessiblePorts` (and `readiness`,
+  which depends on it for address resolution) under host networking,
+  substituting a hardcoded `HOST_NETWORKING_ADDRESS` instead — sharing
+  the host's network namespace means Mopidy's port simply _is_ the
+  host's own port, nothing left to resolve.
+
 ## [0.0.9] - 2026-08-23
 
 ### Fixed

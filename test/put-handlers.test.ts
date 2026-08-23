@@ -12,7 +12,10 @@ import { StateStore, createInitialState } from "../src/state/store.js";
 import type { MopidyClient } from "../src/mopidy-client.js";
 import type { SnapserverClient } from "../src/snapserver-client.js";
 
-function fakeApp(): { app: PutHandlerAppLike; handlers: Map<string, ActionHandler> } {
+function fakeApp(): {
+  app: PutHandlerAppLike;
+  handlers: Map<string, ActionHandler>;
+} {
   const handlers = new Map<string, ActionHandler>();
   return {
     app: {

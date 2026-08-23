@@ -59,9 +59,7 @@ describe("renameLocalSnapclientZone", () => {
     const snapserver: RenameableSnapserverClient = {
       getGroups: vi
         .fn()
-        .mockResolvedValue([
-          { clients: [{ id: LOCAL_SNAPCLIENT_HOST_ID }] },
-        ]),
+        .mockResolvedValue([{ clients: [{ id: LOCAL_SNAPCLIENT_HOST_ID }] }]),
       setClientName,
     };
 
@@ -83,11 +81,9 @@ describe("renameLocalSnapclientZone", () => {
         call < 3 ? [] : [{ clients: [{ id: LOCAL_SNAPCLIENT_HOST_ID }] }],
       );
     });
-    renameLocalSnapclientZone(
-      { getGroups, setClientName },
-      "Local speakers",
-      { intervalMs: 10 },
-    );
+    renameLocalSnapclientZone({ getGroups, setClientName }, "Local speakers", {
+      intervalMs: 10,
+    });
 
     // Generous budget covering several retries -- exact tick-by-tick
     // call counts against fake timers are too implementation-detail-
@@ -112,11 +108,10 @@ describe("renameLocalSnapclientZone", () => {
   it("gives up after maxAttempts without ever finding the client", async () => {
     const getGroups = vi.fn().mockResolvedValue([]);
     const setClientName = vi.fn();
-    renameLocalSnapclientZone(
-      { getGroups, setClientName },
-      "Local speakers",
-      { intervalMs: 10, maxAttempts: 3 },
-    );
+    renameLocalSnapclientZone({ getGroups, setClientName }, "Local speakers", {
+      intervalMs: 10,
+      maxAttempts: 3,
+    });
 
     await vi.advanceTimersByTimeAsync(10 * 20);
     expect(getGroups).toHaveBeenCalledTimes(3);

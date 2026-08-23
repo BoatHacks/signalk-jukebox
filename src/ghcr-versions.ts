@@ -34,7 +34,7 @@ function repoPath(image: string): string {
 
 export async function fetchGhcrVersions(
   image: string,
-  fetchImpl: GhcrFetchLike = fetch as unknown as GhcrFetchLike,
+  fetchImpl: GhcrFetchLike = fetch,
 ): Promise<VersionInfo[]> {
   const repo = repoPath(image);
 

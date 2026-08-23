@@ -373,15 +373,15 @@ All routes under `/plugins/signalk-jukebox`, respecting SignalK access
 control (read for GETs, write/admin for mutating routes, per
 signalk-container-helper conventions):
 
-| Method & path                                      | Purpose                                                  |
-| -------------------------------------------------- | -------------------------------------------------------- |
-| `GET /api/status`                                  | Container/Mopidy status, current playback state          |
-| `GET /api/zones`                                   | `[{ id, name, connected, volume, muted }]`               |
-| `POST /api/zones/:id/volume`                       | `{ volume: 0-100 }`                                      |
-| `POST /api/zones/:id/mute`                         | `{ muted: boolean }`                                     |
-| `GET /api/update/check` / `POST /api/update/apply` | Image update routes (`registerUpdateRoutes`, admin-only) |
+| Method & path                                      | Purpose                                                                                                                                                                                             |
+| -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/status`                                  | Container/Mopidy status, current playback state                                                                                                                                                     |
+| `GET /api/zones`                                   | `[{ id, name, connected, volume, muted }]`                                                                                                                                                          |
+| `POST /api/zones/:id/volume`                       | `{ volume: 0-100 }`                                                                                                                                                                                 |
+| `POST /api/zones/:id/mute`                         | `{ muted: boolean }`                                                                                                                                                                                |
+| `GET /api/update/check` / `POST /api/update/apply` | Image update routes (`registerUpdateRoutes`, admin-only)                                                                                                                                            |
 | `GET /api/versions`                                | Image version list for the config panel dropdown, from GHCR's own tags/list API (`src/ghcr-versions.ts`) — not `registerUpdateRoutes`, which only covers the single latest-version check/apply flow |
-| `GET /api/satellites`                              | `{ ids: string[] }` — known `voice.satellites.<id>` ids (via `app.getSelfPath`), for the config panel's per-satellite duck-mapping dropdown (§6.5, §9) |
+| `GET /api/satellites`                              | `{ ids: string[] }` — known `voice.satellites.<id>` ids (via `app.getSelfPath`), for the config panel's per-satellite duck-mapping dropdown (§6.5, §9)                                              |
 
 Actual playback control (play/pause/skip/queue/search) goes through the
 web client (§7) directly against Mopidy's own HTTP/JSON-RPC API — this
@@ -412,7 +412,7 @@ These exist so other plugins/instruments can show "now playing" or react
 to it; there is no other consumer identified yet (§13).
 
 **Playback control inputs** — the reverse direction from the table above:
-these paths are *consumed*, not published, by this plugin. An external
+these paths are _consumed_, not published, by this plugin. An external
 source (an NMEA2000 momentary switch via another plugin, a webapp button,
 anything that can publish a SignalK delta) sends `1` on press and `0` on
 release; this plugin fires the matching Mopidy action on every `0 -> 1`
@@ -421,12 +421,12 @@ intervening release (`src/controls.ts`, subscribed via
 `app.streambundle.getSelfStream`, the same mechanism §6.5's duck triggers
 use):
 
-| Path                                              | Value                          |
-| -------------------------------------------------- | ------------------------------- |
-| `entertainment.jukebox.playback.controls.play`     | `0\|1`, momentary, press-edge   |
-| `entertainment.jukebox.playback.controls.pause`    | `0\|1`, momentary, press-edge   |
-| `entertainment.jukebox.playback.controls.next`     | `0\|1`, momentary, press-edge   |
-| `entertainment.jukebox.playback.controls.previous` | `0\|1`, momentary, press-edge   |
+| Path                                               | Value                         |
+| -------------------------------------------------- | ----------------------------- |
+| `entertainment.jukebox.playback.controls.play`     | `0\|1`, momentary, press-edge |
+| `entertainment.jukebox.playback.controls.pause`    | `0\|1`, momentary, press-edge |
+| `entertainment.jukebox.playback.controls.next`     | `0\|1`, momentary, press-edge |
+| `entertainment.jukebox.playback.controls.previous` | `0\|1`, momentary, press-edge |
 
 Not PUT-able (there is nothing to read back — a momentary control has no
 resting state worth exposing) and not published by `paths.ts`.
@@ -684,7 +684,7 @@ all-zone fallback, volume duck, §2):**
 | `localSnapclient.enabled`                     | `false`                         | Runs a second, optional managed container (`local-snapclient.ts`, §12) -- a Snapclient zone on this SignalK server's own sound card, for speakers wired directly to that machine rather than a separate physical device                                                                                                                     |
 | `localSnapclient.soundCard`                   | `""`                            | ALSA device string (e.g. `plughw:CARD=wm8960soundcard,DEV=0`); required when enabled, no "auto" fallback -- a bare "default" device is ambiguous on a host with more than one sound card and fails outright (confirmed by build-testing)                                                                                                    |
 | `localSnapclient.tag`                         | `"auto"`                        | Image tag for `ghcr.io/boathacks/signalk-jukebox-snapclient`, this project's own minimal Snapclient-only image                                                                                                                                                                                                                              |
-| `localSnapclient.zoneName`                    | `"Local speakers"`              | Display name set via Snapcast's `Client.SetName` (§12) once the local snapclient connects -- without this, the zone falls back to Snapcast's own default of the client's raw container hostname (e.g. `16684a3df93c`), confirmed by build-testing                                                                                          |
+| `localSnapclient.zoneName`                    | `"Local speakers"`              | Display name set via Snapcast's `Client.SetName` (§12) once the local snapclient connects -- without this, the zone falls back to Snapcast's own default of the client's raw container hostname (e.g. `16684a3df93c`), confirmed by build-testing                                                                                           |
 
 ## 10. MVP Scope
 
@@ -1026,6 +1026,23 @@ all-zone fallback, volume duck, §2):**
     (default off) via the config panel's `hostNetworking` toggle, which
     documents the tradeoff (this container then shares the host's full
     network namespace and port space) directly in its warning banner.
+  - **`signalkAccessiblePorts` and `networkMode: "host"` cannot be
+    combined** — confirmed against a real production instance:
+    signalk-container discards `networkMode` entirely the moment
+    `signalkAccessiblePorts` is also set (its own log warning names the
+    conflict directly), silently falling back to bridge mode. Since
+    `container.ts` also omits `ports` whenever `hostNetworking` is on
+    (correctly assuming host networking would apply), the container
+    ended up in bridge mode with _neither_ publishing mechanism active —
+    Snapcast entirely unreachable, not just AirPlay silently reverted to
+    the exact non-LAN-reachable state `hostNetworking` exists to fix.
+    Fixed by omitting `signalkAccessiblePorts` (and `readiness`, which
+    depends on it for address resolution — see ARCHITECTURE.md §2.2)
+    whenever `hostNetworking` is on, with a hardcoded
+    `HOST_NETWORKING_ADDRESS` (`container.ts`) substituted for the
+    address `readiness` would otherwise have resolved: sharing the
+    host's network namespace makes Mopidy's port simply _be_ the host's
+    own port, nothing left to resolve.
 - **A "local snapclient" companion container (`local-snapclient.ts`,
   §9) over expecting every zone to be a separate physical device.** Some
   boats have speakers wired directly to the SignalK server's own
@@ -1056,8 +1073,8 @@ all-zone fallback, volume duck, §2):**
   container's raw, unreadable hostname (Snapcast's own fallback when no
   name has been set — e.g. `16684a3df93c`, a podman-assigned id).
   Confirmed by hand that snapclient's own `--hostID` flag does NOT fix
-  this — it only overrides the client's unique *id*, not its *display
-  name* — so `image-snapclient/entrypoint.sh` instead pins `--hostID` to
+  this — it only overrides the client's unique _id_, not its _display
+  name_ — so `image-snapclient/entrypoint.sh` instead pins `--hostID` to
   a fixed, known sentinel (`jukebox-local-snapclient`) purely so the
   plugin can find this one deterministic zone once it connects, and
   separately calls Snapcast's own `Client.SetName` RPC on it with the

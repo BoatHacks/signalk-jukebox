@@ -68,8 +68,7 @@ export default function PluginConfigurationPanel({
   // backends.spotify.enabled when backends existed but backends.spotify
   // didn't.
   const merged = mergeSettings(cfg);
-  const { backends, n2k, airplay, vhf, voiceDucking, localSnapclient } =
-    merged;
+  const { backends, n2k, airplay, vhf, voiceDucking, localSnapclient } = merged;
 
   const patch = (next: Partial<PluginSettings>) =>
     setCfg((prev) => ({ ...prev, ...next }));

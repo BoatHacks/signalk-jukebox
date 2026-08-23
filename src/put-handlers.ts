@@ -56,30 +56,41 @@ export function registerPlaybackVolumePutHandler(
   mopidyState: MopidyClientState,
   store: StateStore,
 ): void {
-  app.registerPutHandler(SELF, "entertainment.jukebox.playback.volume", (
-    _context,
-    _path,
-    value,
-    callback,
-  ) => {
-    if (!mopidyState.client) {
-      return { state: "COMPLETED", statusCode: 503, message: "container not ready yet" };
-    }
-    const volume = Number(value);
-    if (!Number.isFinite(volume) || volume < 0 || volume > 100) {
-      return { state: "COMPLETED", statusCode: 400, message: "volume must be 0-100" };
-    }
-    mopidyState.client
-      .setVolume(volume)
-      .then(() => {
-        store.setPlayback({ ...store.getPlayback(), volume });
-        callback({ state: "COMPLETED", statusCode: 200 });
-      })
-      .catch((err: unknown) => {
-        callback({ state: "COMPLETED", statusCode: 502, message: String(err) });
-      });
-    return { state: "PENDING" };
-  });
+  app.registerPutHandler(
+    SELF,
+    "entertainment.jukebox.playback.volume",
+    (_context, _path, value, callback) => {
+      if (!mopidyState.client) {
+        return {
+          state: "COMPLETED",
+          statusCode: 503,
+          message: "container not ready yet",
+        };
+      }
+      const volume = Number(value);
+      if (!Number.isFinite(volume) || volume < 0 || volume > 100) {
+        return {
+          state: "COMPLETED",
+          statusCode: 400,
+          message: "volume must be 0-100",
+        };
+      }
+      mopidyState.client
+        .setVolume(volume)
+        .then(() => {
+          store.setPlayback({ ...store.getPlayback(), volume });
+          callback({ state: "COMPLETED", statusCode: 200 });
+        })
+        .catch((err: unknown) => {
+          callback({
+            state: "COMPLETED",
+            statusCode: 502,
+            message: String(err),
+          });
+        });
+      return { state: "PENDING" };
+    },
+  );
 }
 
 /**
@@ -106,15 +117,27 @@ export function registerZonePutHandlers(
       `entertainment.jukebox.zones.${zoneId}.volume`,
       (_context, _path, value, callback) => {
         if (!snapserverState.client) {
-          return { state: "COMPLETED", statusCode: 503, message: "container not ready yet" };
+          return {
+            state: "COMPLETED",
+            statusCode: 503,
+            message: "container not ready yet",
+          };
         }
         const zone = store.getZone(zoneId);
         if (!zone) {
-          return { state: "COMPLETED", statusCode: 404, message: "unknown zone" };
+          return {
+            state: "COMPLETED",
+            statusCode: 404,
+            message: "unknown zone",
+          };
         }
         const volume = Number(value);
         if (!Number.isFinite(volume) || volume < 0 || volume > 100) {
-          return { state: "COMPLETED", statusCode: 400, message: "volume must be 0-100" };
+          return {
+            state: "COMPLETED",
+            statusCode: 400,
+            message: "volume must be 0-100",
+          };
         }
         snapserverState.client
           .setClientVolume(zoneId, volume, zone.muted)
@@ -123,7 +146,11 @@ export function registerZonePutHandlers(
             callback({ state: "COMPLETED", statusCode: 200 });
           })
           .catch((err: unknown) => {
-            callback({ state: "COMPLETED", statusCode: 502, message: String(err) });
+            callback({
+              state: "COMPLETED",
+              statusCode: 502,
+              message: String(err),
+            });
           });
         return { state: "PENDING" };
       },
@@ -134,11 +161,19 @@ export function registerZonePutHandlers(
       `entertainment.jukebox.zones.${zoneId}.muted`,
       (_context, _path, value, callback) => {
         if (!snapserverState.client) {
-          return { state: "COMPLETED", statusCode: 503, message: "container not ready yet" };
+          return {
+            state: "COMPLETED",
+            statusCode: 503,
+            message: "container not ready yet",
+          };
         }
         const zone = store.getZone(zoneId);
         if (!zone) {
-          return { state: "COMPLETED", statusCode: 404, message: "unknown zone" };
+          return {
+            state: "COMPLETED",
+            statusCode: 404,
+            message: "unknown zone",
+          };
         }
         const muted = Boolean(value);
         snapserverState.client
@@ -148,7 +183,11 @@ export function registerZonePutHandlers(
             callback({ state: "COMPLETED", statusCode: 200 });
           })
           .catch((err: unknown) => {
-            callback({ state: "COMPLETED", statusCode: 502, message: String(err) });
+            callback({
+              state: "COMPLETED",
+              statusCode: 502,
+              message: String(err),
+            });
           });
         return { state: "PENDING" };
       },
