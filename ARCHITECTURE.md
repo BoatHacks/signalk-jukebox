@@ -470,6 +470,16 @@ hostNetworking`, SPEC.md §9, §12) — a real, larger exposure than the
   a default, and not silently applied: the config panel's toggle is off
   by default and its warning banner states the tradeoff plainly before
   an operator opts in.
+- **Dependency audit: no install script runs on a real deployment.**
+  Checked `package-lock.json` for every dependency (direct and
+  transitive) carrying a `hasInstallScript` flag (npm's own marker for a
+  package with a `preinstall`/`install`/`postinstall` script) — the only
+  hit is `fsevents` (a `devDependency`, pulled in transitively via
+  webpack's file-watching chain), and it is `optional: true` restricted
+  to `"os": ["darwin"]`. This plugin's actual target is a SignalK server
+  on Linux (Raspberry Pi or similar), where npm skips `fsevents`
+  entirely on the OS mismatch — so in practice zero install scripts run
+  for a real install of this plugin. No other dependency has one.
 - **Snapserver's `stream.sandbox_dir` containment check (SPEC.md §13)
   exists specifically because unrestricted process-stream creation was a
   real, exploited-class vulnerability (CVE-2023-36177, arbitrary command
