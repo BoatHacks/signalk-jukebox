@@ -609,7 +609,7 @@ signalk-jukebox/
 │   ├── Dockerfile
 │   └── entrypoint.sh
 ├── public/                    # signalk-webapp keyword's static mount, served directly at /signalk-jukebox
-│   ├── index.html             # the plugin's own authenticated playback/zone UI (transport, volume, per-zone mute/play-here, play-URI) -- no library browse/search, unrelated to Mopidy's own web client (§7)
+│   ├── index.html             # the plugin's own authenticated playback/zone UI (transport, volume, per-zone mute/play-here, play-URI, links to Mopidy's own web client + Snapweb) -- no library browse/search itself (§7)
 │   └── app.js
 ├── test/
 └── webpack.config.cjs         # config-panel remote build (ESM, per container-helper's UI notes)

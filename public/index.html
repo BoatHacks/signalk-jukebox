@@ -146,6 +146,20 @@
       .status-dot.ok {
         background: #4caf50;
       }
+      .external-links {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+      .external-links a {
+        color: var(--accent);
+        text-decoration: none;
+        font-size: 0.9rem;
+        font-weight: 600;
+      }
+      .external-links a:hover {
+        text-decoration: underline;
+      }
       .zones-header {
         display: flex;
         align-items: center;
@@ -299,6 +313,15 @@
         <div id="zoneList">
           <div class="zone-empty">No zones connected</div>
         </div>
+      </section>
+
+      <section class="panel external-links">
+        <a id="musicboxLink" href="#" target="_blank" rel="noreferrer"
+          >Open Mopidy library (search/browse/queue) ↗</a
+        >
+        <a id="snapwebLink" href="#" target="_blank" rel="noreferrer"
+          >Open Snapweb (zone/stream management) ↗</a
+        >
       </section>
     </main>
     <script src="app.js"></script>
