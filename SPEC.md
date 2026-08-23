@@ -420,6 +420,17 @@ regardless of which interface caused it:
 These exist so other plugins/instruments can show "now playing" or react
 to it; there is no other consumer identified yet (§13).
 
+Every one of these paths gets real metadata (`description`, `units`
+where numeric, an `example` value) — not just a bare `values` update —
+confirmed against `@signalk/server-api`'s own `Meta`/`MetaValue` types
+(there is no formal "type" field in SignalK's meta at all; `description`
+
+- `example` is the spec-compliant way to convey a value's shape).
+  `playback.*`'s meta is sent once, synchronously, when
+  `publishStateChanges` starts, since those paths always exist regardless
+  of state; each zone's meta is sent once, the first time that zone id is
+  ever seen, alongside its first `values` update (`paths.ts`).
+
 **Playback control inputs** — the reverse direction from the table above:
 these paths are _consumed_, not published, by this plugin. An external
 source (an NMEA2000 momentary switch via another plugin, a webapp button,

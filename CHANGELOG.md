@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.0.13] - 2026-08-23
+
+### Added
+
+- Real metadata (`description`, `units` where numeric, an `example`
+  value) for every `entertainment.jukebox.*` path the plugin publishes
+  — `playback.state`, `playback.volume`, `playback.track`, and each
+  zone's `connected`/`volume`/`muted`/`n2kZone`. SignalK's own meta type
+  has no formal "type" field; `description` + `example` is the
+  spec-compliant way to convey a value's shape (e.g. that
+  `playback.state` is a string).
+
 ## [0.0.12] - 2026-08-23
 
 ### Added
