@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- A third Snapcast stream, "Output" (`meta:///Alerts/Jukebox`) — auto-ducks
+  the jukebox for an announcement and auto-resumes it afterward, with no
+  muting or zone reassignment needed from any plugin. This is now what
+  "play the jukebox" actually means for a zone (`JUKEBOX_STREAM_ID` is
+  `"Output"`, not the raw "Jukebox" stream); zones from before this stream
+  existed are migrated onto it once at startup, no manual re-click needed.
 - A second Snapcast stream, "Alerts" — a standing announcement intake
   (Snapcast's `tcp server` source type, port 4953) any other container or
   process can connect to and stream a WAV-framed announcement into. The

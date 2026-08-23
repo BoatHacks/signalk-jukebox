@@ -884,6 +884,25 @@ all-zone fallback, volume duck, §2):**
   (container.ts's `ports`) -- deliberately not routed through this
   plugin's REST API, so any producer just needs a TCP connection, no
   SignalK-specific integration.
+- **Auto-ducking `"Output"` meta stream, not per-zone muting/reassignment,
+  for a zone to hear an announcement without losing its music** —
+  Snapcast's own `meta` source type (`meta:///Alerts/Jukebox?name=Output`,
+  snapserver.conf.template) plays whichever listed source is currently
+  active, highest-priority first; confirmed by build-testing that with
+  Alerts listed first, this stream automatically switches to it the moment
+  audio arrives there and automatically falls back to Jukebox the moment
+  Alerts goes idle, with no muting or Group.SetStream calls needed from any
+  plugin. This is now what "play the jukebox" actually means for a zone --
+  `JUKEBOX_STREAM_ID` (zone-sync.ts, routes.ts) is `"Output"`, not the raw
+  `"Jukebox"` stream, which is now only ever a meta-stream input, never a
+  zone's own direct assignment. A zone manually switched to `"Alerts"`
+  (above) is unaffected by this -- that's still an exclusive, no-jukebox
+  state, a different concept from Output's auto-duck-and-resume. Existing
+  zones from before this stream existed are migrated once at startup
+  (`migrateZonesToOutputStream()`, zone-sync.ts): any group still on the
+  raw `"Jukebox"` stream (a Snapcast-persisted assignment that survives
+  container recreates) is moved onto `"Output"`, so upgrading doesn't
+  require re-clicking "Play here" on every zone.
 - **Combined Mopidy+Snapserver image over two containers** — one
   `ManagedContainer` instance, one lifecycle, no inter-container network
   wiring to get wrong; matches the precedent set by signalk-wyoming's

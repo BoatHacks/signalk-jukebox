@@ -17,7 +17,7 @@ import {
 } from "./routes.js";
 import { registerMopidyProxy, type MopidyProxyState } from "./proxy.js";
 import { SnapserverClient } from "./snapserver-client.js";
-import { startZoneSync } from "./zone-sync.js";
+import { startZoneSync, migrateZonesToOutputStream } from "./zone-sync.js";
 import { startPlaybackSync } from "./playback-sync.js";
 import {
   createLocalSnapclient,
@@ -154,6 +154,13 @@ export default function plugin(app: App) {
         });
         snapserverState.client = snapserverClient;
         stopZoneSync = startZoneSync(store, snapserverClient);
+        // One-time: move any zone still on the raw "Jukebox" stream (from
+        // before the Output meta stream existed) onto "Output", so it
+        // starts auto-ducking for announcements (zone-sync.ts's own
+        // comment). Fire-and-forget -- a failure here doesn't block
+        // startup, and the next zone-sync tick just keeps reporting
+        // whatever Snapcast actually has.
+        void migrateZonesToOutputStream(snapserverClient, (msg) => app.error(msg));
 
         // The local snapclient's zone starts out named after its raw
         // container hostname (Snapcast's own fallback when no name has

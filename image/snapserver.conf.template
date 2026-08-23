@@ -28,6 +28,25 @@ source = pipe:///tmp/snapfifo?name=Jukebox&sampleformat=48000:16:2
 # `wavenc` for exactly this reason).
 source = tcp://0.0.0.0:4953?name=Alerts&sampleformat=48000:16:2&mode=server
 
+# Auto-ducking combined output (SPEC.md §6, §12) -- what a zone actually
+# means by "play the jukebox" (src/zone-sync.ts, src/routes.ts's own
+# JUKEBOX_STREAM_ID, both now "Output", not "Jukebox" directly). Snapcast's
+# `meta` source type plays whichever listed source is currently active,
+# highest-priority first -- confirmed by build-testing: with Alerts listed
+# first, this stream automatically switches to it the moment audio starts
+# arriving there, then automatically falls back to Jukebox the moment
+# Alerts goes idle again, with no zone-reassignment or muting needed from
+# any plugin. Jukebox and Alerts keep their own real codec (not `codec=null`
+# as Snapcast's docs suggest for meta-only inputs) because they're still
+# directly connectable in their own right (a zone manually switched to
+# "Alerts" via the webapp targets the raw stream, not this one).
+source = meta:///Alerts/Jukebox?name=Output
+
+# New (never-before-seen) Snapclients default here, not the raw Jukebox
+# stream, so they get the auto-ducking behavior from their very first
+# connection -- otherwise defaults to the first non-meta source (Jukebox).
+default_source = Output
+
 # Runtime-created airplay streams (Stream.AddStream) must reference an
 # executable inside this directory -- confirmed via research (SPEC.md
 # §13) this is Snapserver >= 0.33.0's replacement for the earlier

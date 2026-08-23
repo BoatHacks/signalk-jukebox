@@ -145,6 +145,20 @@ other directly) when a command arrives on its interface.
   cases. Published to the LAN the same way as `SNAPWEB_PORT`/`MOPIDY_PORT`
   above (container.ts's `ports`) — not routed through this plugin's own
   REST API at all, so any producer just needs a plain TCP connection.
+- A third stream, `"Output"` (`meta:///Alerts/Jukebox?name=Output`,
+  snapserver.conf.template), auto-ducks: Snapcast's `meta` source type
+  plays whichever listed source is currently active, Alerts taking
+  priority over Jukebox, confirmed by build-testing to switch to Alerts
+  the instant it goes active and fall back to Jukebox the instant it goes
+  idle again — no muting or `Group.SetStream` calls needed from any
+  plugin. `"Output"`, not the raw `"Jukebox"` stream, is what
+  `JUKEBOX_STREAM_ID` (`zone-sync.ts`, `routes.ts`) actually means now —
+  the raw stream is a meta-stream input only, never a zone's own direct
+  assignment. `migrateZonesToOutputStream()` (`zone-sync.ts`) runs once at
+  plugin start: any zone still on the raw `"Jukebox"` stream from before
+  this existed (a Snapcast-persisted assignment surviving container
+  recreates) is moved onto `"Output"`, so upgrading needs no manual
+  per-zone re-click.
 - **Resolves its own address differently under `airplay.hostNetworking`
   (SPEC.md §12).** The normal path (`signalkAccessiblePorts` +
   `readiness`) can't be used there at all: confirmed against a real
