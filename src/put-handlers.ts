@@ -18,6 +18,17 @@ import type { StateStore, StateChangeEvent } from "./state/store.js";
 import type { MopidyClient } from "./mopidy-client.js";
 import type { SnapserverClientState } from "./routes.js";
 
+/** SignalK's own convention for a level/percentage-like quantity is a
+ * 0-1 ratio (paths.ts publishes these paths that way) -- a PUT to the
+ * same path must accept the same shape it publishes, converted here to
+ * the 0-100 integer Mopidy/Snapcast's own native APIs actually speak.
+ * Returns null for anything outside 0-1 (including non-finite input). */
+function ratioToPercent(value: unknown): number | null {
+  const ratio = Number(value);
+  if (!Number.isFinite(ratio) || ratio < 0 || ratio > 1) return null;
+  return Math.round(ratio * 100);
+}
+
 export interface ActionResult {
   state: "COMPLETED" | "PENDING" | "FAILED";
   statusCode?: number;
@@ -67,12 +78,12 @@ export function registerPlaybackVolumePutHandler(
           message: "container not ready yet",
         };
       }
-      const volume = Number(value);
-      if (!Number.isFinite(volume) || volume < 0 || volume > 100) {
+      const volume = ratioToPercent(value);
+      if (volume === null) {
         return {
           state: "COMPLETED",
           statusCode: 400,
-          message: "volume must be 0-100",
+          message: "volume must be a ratio, 0-1",
         };
       }
       mopidyState.client
@@ -131,12 +142,12 @@ export function registerZonePutHandlers(
             message: "unknown zone",
           };
         }
-        const volume = Number(value);
-        if (!Number.isFinite(volume) || volume < 0 || volume > 100) {
+        const volume = ratioToPercent(value);
+        if (volume === null) {
           return {
             state: "COMPLETED",
             statusCode: 400,
-            message: "volume must be 0-100",
+            message: "volume must be a ratio, 0-1",
           };
         }
         snapserverState.client

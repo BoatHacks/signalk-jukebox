@@ -12,6 +12,16 @@ export interface AppLike {
   handleMessage(pluginId: string, delta: unknown): void;
 }
 
+/** SignalK's own convention for a level/percentage-like quantity is a
+ * 0-1 ratio, not 0-100 -- confirmed against the spec's own units
+ * vocabulary. The 0-100 integer is this plugin's own internal
+ * representation everywhere else (REST API, Mopidy/Snapcast's own
+ * native APIs, the web UI's <input type="range">), since that's what
+ * those APIs actually speak; only the SK delta boundary converts. */
+function toRatio(percent: number): number {
+  return percent / 100;
+}
+
 /** SignalK's real Meta shape (@signalk/server-api's MetaValue) has no
  * "type" field at all -- description + example is the spec-compliant way
  * to convey a value's shape/type, confirmed against that package's own
@@ -35,9 +45,9 @@ const PLAYBACK_META: MetaEntry[] = [
   {
     path: "entertainment.jukebox.playback.volume",
     value: {
-      description: "Master playback volume, 0-100 (number)",
-      units: "%",
-      example: "50",
+      description: "Master playback volume, 0-1 (number)",
+      units: "ratio",
+      example: "0.5",
     },
   },
   {
@@ -62,9 +72,9 @@ function zoneMeta(zoneId: string): MetaEntry[] {
     {
       path: `entertainment.jukebox.zones.${zoneId}.volume`,
       value: {
-        description: "This zone's Snapcast client volume, 0-100 (number)",
-        units: "%",
-        example: "50",
+        description: "This zone's Snapcast client volume, 0-1 (number)",
+        units: "ratio",
+        example: "0.5",
       },
     },
     {
@@ -110,7 +120,7 @@ export function publishStateChanges(
             },
             {
               path: "entertainment.jukebox.playback.volume",
-              value: change.playback.volume,
+              value: toRatio(change.playback.volume),
             },
             ...(change.playback.track
               ? [
@@ -133,7 +143,7 @@ export function publishStateChanges(
               },
               {
                 path: `entertainment.jukebox.zones.${change.zoneId}.volume`,
-                value: change.zone.volume,
+                value: toRatio(change.zone.volume),
               },
               {
                 path: `entertainment.jukebox.zones.${change.zoneId}.muted`,

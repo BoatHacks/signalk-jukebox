@@ -564,7 +564,7 @@ signalk-jukebox/
 │   ├── routes.ts              # /api/* Express routes
 │   ├── openapi.ts              # OpenAPI 3.0.3 doc for the REST API, exposed via plugin.getOpenApi (SPEC.md §6.1)
 │   ├── ghcr-versions.ts       # GHCR tags/list -> VersionInfo[], backs GET /api/versions (SPEC.md §6.1)
-│   ├── paths.ts                # entertainment.* SK path publishing + meta (description/units/example, SPEC.md §6.2)
+│   ├── paths.ts                # entertainment.* SK path publishing + meta (description/units/example, 0-100 -> 0-1 ratio conversion, SPEC.md §6.2)
 │   ├── controls.ts             # entertainment.jukebox.playback.controls.* -> Mopidy play/pause/next/previous (§2.7, SPEC.md §6.2)
 │   ├── put-handlers.ts         # PUT handling for playback.volume / zones.<id>.volume/muted (§2.8, SPEC.md §6.2)
 │   ├── configpanel/            # React admin panel (signalk-container-helper/ui)

@@ -61,12 +61,12 @@ describe("registerPlaybackVolumePutHandler", () => {
 
     const result = await callHandler(
       handlers.get("entertainment.jukebox.playback.volume")!,
-      101,
+      1.5,
     );
     expect(result.statusCode).toBe(400);
   });
 
-  it("calls MopidyClient.setVolume and updates the store on success", async () => {
+  it("calls MopidyClient.setVolume (0-100) with the path's 0-1 ratio converted, and updates the store", async () => {
     const { app, handlers } = fakeApp();
     const store = new StateStore(createInitialState());
     const setVolume = vi.fn().mockResolvedValue(true);
@@ -77,7 +77,7 @@ describe("registerPlaybackVolumePutHandler", () => {
 
     const result = await callHandler(
       handlers.get("entertainment.jukebox.playback.volume")!,
-      42,
+      0.42,
     );
     expect(setVolume).toHaveBeenCalledWith(42);
     expect(store.getPlayback().volume).toBe(42);
@@ -108,7 +108,7 @@ describe("registerZonePutHandlers", () => {
     expect(handlers.has("entertainment.jukebox.zones.z1.muted")).toBe(true);
   });
 
-  it("writes through setClientVolume and updates the store", async () => {
+  it("writes through setClientVolume (0-100) with the path's 0-1 ratio converted, and updates the store", async () => {
     const { app, handlers } = fakeApp();
     const store = new StateStore(createInitialState());
     const setClientVolume = vi.fn().mockResolvedValue(true);
@@ -128,7 +128,7 @@ describe("registerZonePutHandlers", () => {
 
     const result = await callHandler(
       handlers.get("entertainment.jukebox.zones.z1.volume")!,
-      80,
+      0.8,
     );
     expect(setClientVolume).toHaveBeenCalledWith("z1", 80, false);
     expect(store.getZone("z1")?.volume).toBe(80);
@@ -155,7 +155,7 @@ describe("registerZonePutHandlers", () => {
 
     const result = await callHandler(
       handlers.get("entertainment.jukebox.zones.z1.volume")!,
-      80,
+      0.8,
     );
     expect(result.statusCode).toBe(404);
   });

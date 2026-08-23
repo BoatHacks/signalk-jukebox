@@ -87,4 +87,48 @@ describe("publishStateChanges", () => {
     ];
     expect(delta.updates).toHaveLength(1); // values only, no meta
   });
+
+  it("publishes playback.volume as a 0-1 ratio, not the internal 0-100 value", () => {
+    const handleMessage = vi.fn();
+    const store = new StateStore(createInitialState());
+    publishStateChanges({ handleMessage }, "signalk-jukebox", store);
+    handleMessage.mockClear();
+
+    store.setPlayback({ state: "playing", volume: 42, muted: false });
+
+    const [, delta] = handleMessage.mock.calls[0] as [
+      string,
+      { updates: { values: { path: string; value: unknown }[] }[] },
+    ];
+    const volumeUpdate = delta.updates[0]!.values.find(
+      (v) => v.path === "entertainment.jukebox.playback.volume",
+    );
+    expect(volumeUpdate?.value).toBeCloseTo(0.42);
+  });
+
+  it("publishes a zone's volume as a 0-1 ratio, not the internal 0-100 value", () => {
+    const handleMessage = vi.fn();
+    const store = new StateStore(createInitialState());
+    publishStateChanges({ handleMessage }, "signalk-jukebox", store);
+    handleMessage.mockClear();
+
+    store.setZone({
+      id: "z1",
+      groupId: "g1",
+      name: "Salon",
+      connected: true,
+      volume: 80,
+      muted: false,
+      activeSource: "jukebox",
+    });
+
+    const [, delta] = handleMessage.mock.calls[0] as [
+      string,
+      { updates: { values?: { path: string; value: unknown }[] }[] },
+    ];
+    const volumeUpdate = delta.updates[0]!.values!.find(
+      (v) => v.path === "entertainment.jukebox.zones.z1.volume",
+    );
+    expect(volumeUpdate?.value).toBeCloseTo(0.8);
+  });
 });

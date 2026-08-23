@@ -406,16 +406,16 @@ there to Mopidy/Snapserver) exactly like a REST call or a Fusion-Link
 command would; deltas are published on every canonical-state change
 regardless of which interface caused it:
 
-| Path                                             | Value                                   | Notes                                                                              |
-| ------------------------------------------------ | --------------------------------------- | ---------------------------------------------------------------------------------- |
-| `entertainment.jukebox.playback.state`           | `'stopped'\|'playing'\|'paused'`        |                                                                                    |
-| `entertainment.jukebox.playback.track`           | `{ name, artist?, album? }`             | Present only while playing/paused                                                  |
-| `entertainment.jukebox.playback.volume`          | `number` (0-100), PUT-able              | Master volume (§4)                                                                 |
-| `entertainment.jukebox.zones.<id>.connected`     | `boolean`                               |                                                                                    |
-| `entertainment.jukebox.zones.<id>.volume`        | `number` (0-100), PUT-able              |                                                                                    |
-| `entertainment.jukebox.zones.<id>.muted`         | `boolean`, PUT-able                     |                                                                                    |
-| `entertainment.jukebox.zones.<id>.n2kZone`       | `number` (0-3), read-only               | Present only if assigned (§2)                                                      |
-| `entertainment.jukebox.zones.<id>.airplay.track` | `{ title, artist?, album? }`, read-only | Present only while `activeSource` is `airplay` and metadata has arrived (§4, §6.4) |
+| Path                                             | Value                                   | Notes                                                                                                                                                                                    |
+| ------------------------------------------------ | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `entertainment.jukebox.playback.state`           | `'stopped'\|'playing'\|'paused'`        |                                                                                                                                                                                          |
+| `entertainment.jukebox.playback.track`           | `{ name, artist?, album? }`             | Present only while playing/paused                                                                                                                                                        |
+| `entertainment.jukebox.playback.volume`          | `number` (0-1 ratio), PUT-able          | Master volume (§4). SignalK's own convention for a level like this is a 0-1 ratio, not 0-100 — converted at this boundary only; internally (REST API, Mopidy's own API) it's still 0-100 |
+| `entertainment.jukebox.zones.<id>.connected`     | `boolean`                               |                                                                                                                                                                                          |
+| `entertainment.jukebox.zones.<id>.volume`        | `number` (0-1 ratio), PUT-able          | Same 0-1/0-100 conversion as `playback.volume` above                                                                                                                                     |
+| `entertainment.jukebox.zones.<id>.muted`         | `boolean`, PUT-able                     |                                                                                                                                                                                          |
+| `entertainment.jukebox.zones.<id>.n2kZone`       | `number` (0-3), read-only               | Present only if assigned (§2)                                                                                                                                                            |
+| `entertainment.jukebox.zones.<id>.airplay.track` | `{ title, artist?, album? }`, read-only | Present only while `activeSource` is `airplay` and metadata has arrived (§4, §6.4)                                                                                                       |
 
 These exist so other plugins/instruments can show "now playing" or react
 to it; there is no other consumer identified yet (§13).

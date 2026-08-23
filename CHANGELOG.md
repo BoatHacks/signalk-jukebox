@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.0.14] - 2026-08-23
+
+### Fixed
+
+- `entertainment.jukebox.playback.volume` and
+  `entertainment.jukebox.zones.<id>.volume` were published as 0-100
+  with `units: "%"` — SignalK's own convention for a level like this is
+  a 0-1 ratio, not a percentage. Converted at this boundary only:
+  internally (REST API, Mopidy/Snapcast's own native APIs, the web UI)
+  the plugin still uses 0-100 throughout, since that's what those APIs
+  actually speak — only `paths.ts`'s published values/meta and the
+  matching PUT handlers (which must accept the same shape they publish)
+  now convert to/from the SK-facing 0-1 ratio.
+
 ## [0.0.13] - 2026-08-23
 
 ### Added
