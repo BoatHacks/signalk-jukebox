@@ -28,6 +28,15 @@ source = pipe:///tmp/snapfifo?name=Jukebox&sampleformat=48000:16:2
 # `wavenc` for exactly this reason).
 source = tcp://0.0.0.0:4953?name=Alerts&sampleformat=48000:16:2&mode=server
 
+# A third, deliberate "hear nothing at all" state (SPEC.md §6, §12) for a
+# zone to be manually parked on (src/routes.ts's /source endpoint,
+# "silence") -- e.g. a sleeping cabin, where even an announcement isn't
+# wanted. All-zero bytes are digital silence in S16LE PCM, so entrypoint.sh
+# feeds this pipe from `/dev/zero`, continuously, before Snapserver starts
+# -- a genuine, always-available audio source, no synth/audio tooling
+# needed.
+source = pipe:///tmp/silencefifo?name=Silence&sampleformat=48000:16:2
+
 # Auto-ducking combined output (SPEC.md §6, §12) -- what a zone actually
 # means by "play the jukebox" (src/zone-sync.ts, src/routes.ts's own
 # JUKEBOX_STREAM_ID, both now "Output", not "Jukebox" directly). Snapcast's

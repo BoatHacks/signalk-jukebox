@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- A fourth Snapcast stream, "Silence" (`pipe:///tmp/silencefifo`, fed
+  continuously from `/dev/zero`) — for a zone that shouldn't hear anything
+  at all, not even announcements, e.g. a sleeping cabin. `POST
+  /api/zones/:id/source` now also accepts `"silence"`; the webapp's
+  per-zone control is now three exclusive buttons (Jukebox/Alerts/Silence)
+  instead of a two-way toggle.
 - A third Snapcast stream, "Output" (`meta:///Alerts/Jukebox`) — auto-ducks
   the jukebox for an announcement and auto-resumes it afterward, with no
   muting or zone reassignment needed from any plugin. This is now what

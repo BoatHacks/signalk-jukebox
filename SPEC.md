@@ -903,6 +903,22 @@ all-zone fallback, volume duck, §2):**
   raw `"Jukebox"` stream (a Snapcast-persisted assignment that survives
   container recreates) is moved onto `"Output"`, so upgrading doesn't
   require re-clicking "Play here" on every zone.
+- **A fourth stream, `"Silence"`, for a zone that should hear nothing at
+  all, not even announcements** (e.g. a sleeping cabin) — deliberately not
+  achieved via client-level muting, which is a separate, already-existing
+  control (the webapp's own Mute button); this is a genuine audio source a
+  zone is switched onto, same as Jukebox/Alerts. All-zero bytes are digital
+  silence in S16LE PCM, so `entrypoint.sh` feeds `snapserver.conf.template`'s
+  `pipe:///tmp/silencefifo?name=Silence` continuously from `/dev/zero`,
+  started before Snapserver so its `pipe://` reader doesn't block waiting
+  for a writer -- confirmed by build-testing to register and stay stable
+  with no synth/audio tooling needed at all. Paced by the FIFO's own kernel
+  buffer (`cat` blocks once it fills, resuming only as Snapserver actually
+  reads), so the writer needs no knowledge of the sample rate. `"silence"`
+  is a third value `routes.ts`'s `/source` endpoint accepts, alongside
+  `"jukebox"`/`"alerts"`; the webapp's per-zone control is three exclusive
+  buttons (Jukebox/Alerts/Silence), not a two-way toggle, mirroring the
+  three real states a zone can be manually put in.
 - **Combined Mopidy+Snapserver image over two containers** — one
   `ManagedContainer` instance, one lifecycle, no inter-container network
   wiring to get wrong; matches the precedent set by signalk-wyoming's

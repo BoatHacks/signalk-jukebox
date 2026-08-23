@@ -33,11 +33,26 @@ cp "$(command -v shairport-sync)" /app/sandbox/shairport-sync
 rm -f /tmp/snapfifo
 mkfifo /tmp/snapfifo
 
+# Silence stream (SPEC.md §6, §12) -- a zone parked here (routes.ts's
+# /source endpoint, "silence") hears literally nothing, not even
+# announcements, e.g. a sleeping cabin. All-zero bytes are digital silence
+# in S16LE PCM, so `cat /dev/zero` into this FIFO is a genuine, real audio
+# source Snapserver reads continuously -- no synth/audio tooling needed.
+# Paced by the FIFO's own kernel buffer: `cat` blocks once it fills
+# (~64KB default), resuming only as Snapserver actually reads, so this
+# naturally matches playback speed without the writer needing to know the
+# sample rate at all. Started before snapserver so its `pipe://` reader
+# doesn't block waiting for a writer to open the other end.
+rm -f /tmp/silencefifo
+mkfifo /tmp/silencefifo
+cat /dev/zero > /tmp/silencefifo &
+SILENCE_PID=$!
+
 envsubst < /app/mopidy.conf.template > /data/mopidy.conf
 envsubst < /app/snapserver.conf.template > /etc/snapserver.conf
 
 snapserver --config /etc/snapserver.conf &
 SNAPSERVER_PID=$!
-trap 'kill "$SNAPSERVER_PID" 2>/dev/null || true' TERM INT EXIT
+trap 'kill "$SNAPSERVER_PID" "$SILENCE_PID" 2>/dev/null || true' TERM INT EXIT
 
 exec mopidy --config /data/mopidy.conf

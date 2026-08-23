@@ -19,13 +19,18 @@ import type { SnapserverClient } from "./snapserver-client.js";
 // stream always uses (same file's `source = tcp://...?name=Alerts&...`,
 // container.ts's ALERTS_STREAM_ID) -- a zone manually switched there (src/
 // routes.ts's /source endpoint) hears ONLY announcements, no jukebox at
-// all, unlike Output's auto-duck. Anything else a group's stream_id
+// all, unlike Output's auto-duck. "Silence" is the fixed stream id a zone
+// is manually parked on (same endpoint) to hear literally nothing, not
+// even announcements -- e.g. a sleeping cabin (same file's
+// `source = pipe:///tmp/silencefifo?name=Silence&...`, fed continuously
+// from /dev/zero by entrypoint.sh). Anything else a group's stream_id
 // resolves to is that zone's own per-connection AirPlay stream (SPEC.md
 // §6.4).
 
 const JUKEBOX_STREAM_ID = "Output";
 const MIGRATION_JUKEBOX_STREAM_ID = "Jukebox";
 const ALERTS_STREAM_ID = "Alerts";
+const SILENCE_STREAM_ID = "Silence";
 const DEFAULT_INTERVAL_MS = 2000;
 
 // One-time migration (SPEC.md §12): before the Output meta stream existed,
@@ -82,7 +87,9 @@ export function startZoneSync(
                 ? "jukebox"
                 : group.streamId === ALERTS_STREAM_ID
                   ? "alerts"
-                  : "airplay",
+                  : group.streamId === SILENCE_STREAM_ID
+                    ? "silence"
+                    : "airplay",
             n2kZone: existing?.n2kZone,
             airplay: existing?.airplay,
           });

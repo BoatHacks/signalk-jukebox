@@ -171,7 +171,11 @@ function buildZoneRow(zone) {
       <span class="zone-source"></span>
     </div>
     <div class="zone-controls">
-      <button class="play-here">Play here</button>
+      <div class="source-buttons">
+        <button class="source-btn jukebox" data-source="jukebox">Jukebox</button>
+        <button class="source-btn alerts" data-source="alerts">Alerts</button>
+        <button class="source-btn silence" data-source="silence">Silence</button>
+      </div>
       <input type="range" min="0" max="100" value="0">
       <span class="volume-value">0%</span>
       <button class="mute-btn">Mute</button>
@@ -180,26 +184,25 @@ function buildZoneRow(zone) {
   const nameDot = row.querySelector(".status-dot");
   const nameText = row.querySelector(".name-text");
   const sourceBadge = row.querySelector(".zone-source");
-  const playBtn = row.querySelector(".play-here");
+  const sourceButtons = Array.from(row.querySelectorAll(".source-btn"));
   const volumeInput = row.querySelector("input[type=range]");
   const volumeValue = row.querySelector(".volume-value");
   const muteBtn = row.querySelector(".mute-btn");
 
-  // A toggle, not a one-way switch: while this zone is already playing the
-  // jukebox stream, clicking again switches it to the "alerts" source
-  // instead (routes.ts) -- a standing announcement-intake stream other
-  // containers can feed -- rather than muting the whole Snapclient, which
-  // would also silence announcements meant for it. AirPlay is the only
-  // source this can't set manually: it's switched to automatically on
-  // connect (routes.ts), never chosen here.
-  playBtn.addEventListener("click", async () => {
-    const entry = zoneRows.get(zone.id);
-    const isPlayingHere = entry.lastActiveSource === "jukebox";
-    await zonePost(zone.id, "source", {
-      source: isPlayingHere ? "alerts" : "jukebox",
+  // Three exclusive states, not a toggle: "jukebox" is the auto-ducking
+  // combined stream (routes.ts's JUKEBOX_STREAM_ID, "Output" underneath --
+  // hears the shared music, automatically interrupted for an announcement,
+  // then automatically resumed); "alerts" hears ONLY announcements, no
+  // jukebox at all, without muting the whole Snapclient; "silence" hears
+  // nothing at all, not even announcements, e.g. a sleeping cabin. AirPlay
+  // is the only source this can't set manually: it's switched to
+  // automatically on connect (routes.ts), never chosen here.
+  for (const btn of sourceButtons) {
+    btn.addEventListener("click", async () => {
+      await zonePost(zone.id, "source", { source: btn.dataset.source });
+      refreshZones();
     });
-    refreshZones();
-  });
+  }
 
   volumeInput.addEventListener("mousedown", () =>
     draggingZoneVolumes.add(zone.id),
@@ -228,7 +231,7 @@ function buildZoneRow(zone) {
     nameDot,
     nameText,
     sourceBadge,
-    playBtn,
+    sourceButtons,
     volumeInput,
     volumeValue,
     muteBtn,
@@ -245,12 +248,14 @@ function updateZoneRow(entry, zone) {
       ? "Jukebox"
       : zone.activeSource === "alerts"
         ? "Alerts"
-        : "AirPlay";
+        : zone.activeSource === "silence"
+          ? "Silence"
+          : "AirPlay";
   entry.sourceBadge.className = `zone-source ${zone.activeSource}`;
   entry.lastActiveSource = zone.activeSource;
-  const isPlayingHere = zone.activeSource === "jukebox";
-  entry.playBtn.textContent = isPlayingHere ? "Stop" : "Play here";
-  entry.playBtn.classList.toggle("on", isPlayingHere);
+  for (const btn of entry.sourceButtons) {
+    btn.classList.toggle("on", btn.dataset.source === zone.activeSource);
+  }
   if (!draggingZoneVolumes.has(zone.id)) {
     entry.volumeInput.value = zone.volume;
     entry.volumeValue.textContent = `${zone.volume}%`;

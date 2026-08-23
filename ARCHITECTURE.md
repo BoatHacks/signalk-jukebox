@@ -159,6 +159,16 @@ other directly) when a command arrives on its interface.
   this existed (a Snapcast-persisted assignment surviving container
   recreates) is moved onto `"Output"`, so upgrading needs no manual
   per-zone re-click.
+- A fourth stream, `"Silence"` (`pipe:///tmp/silencefifo?name=Silence`,
+  snapserver.conf.template), for a zone that should hear nothing at all,
+  not even announcements. `entrypoint.sh` starts `cat /dev/zero >
+  /tmp/silencefifo &` before Snapserver — all-zero bytes are digital
+  silence in S16LE PCM, and the FIFO's own kernel buffer naturally paces
+  the writer to Snapserver's actual read rate, so no audio tooling or
+  sample-rate awareness is needed on the writer side. `routes.ts`'s
+  `/source` endpoint accepts `"silence"` as a third value alongside
+  `"jukebox"`/`"alerts"`; the webapp's per-zone control is three exclusive
+  buttons, not a two-way toggle.
 - **Resolves its own address differently under `airplay.hostNetworking`
   (SPEC.md §12).** The normal path (`signalkAccessiblePorts` +
   `readiness`) can't be used there at all: confirmed against a real

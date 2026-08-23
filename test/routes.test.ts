@@ -98,7 +98,29 @@ describe("POST /api/zones/:id/source", () => {
     expect(store.getZone("zone-1")?.activeSource).toBe("alerts");
   });
 
-  it("rejects a source other than jukebox/alerts, e.g. airplay", async () => {
+  it("switches a zone to the silence stream", async () => {
+    const store = makeStore({ ...zone, activeSource: "jukebox" });
+    const setGroupStream = vi.fn().mockResolvedValue(undefined);
+    const { router, posts } = fakeRouter();
+    registerRoutes({
+      router,
+      store,
+      snapserver: { client: { setGroupStream } as unknown as SnapserverClient },
+      app: { getSelfPath: () => undefined },
+    });
+
+    const res = fakeRes();
+    await posts["/api/zones/:id/source"](
+      { params: { id: "zone-1" }, body: { source: "silence" } },
+      res,
+    );
+
+    expect(setGroupStream).toHaveBeenCalledWith("group-1", "Silence");
+    expect(res.body).toEqual({ ok: true });
+    expect(store.getZone("zone-1")?.activeSource).toBe("silence");
+  });
+
+  it("rejects a source other than jukebox/alerts/silence, e.g. airplay", async () => {
     const store = makeStore(zone);
     const setGroupStream = vi.fn();
     const { router, posts } = fakeRouter();

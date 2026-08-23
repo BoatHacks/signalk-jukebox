@@ -229,10 +229,16 @@
         background: #ffb347;
         border-color: #ffb347;
       }
+      .zone-source.silence {
+        color: #fff;
+        background: #64748b;
+        border-color: #64748b;
+      }
       .zone-controls {
         display: flex;
         align-items: center;
         gap: 0.6rem;
+        flex-wrap: wrap;
       }
       .zone-controls input[type="range"] {
         flex: 1;
@@ -247,10 +253,24 @@
         font-size: 0.8rem;
         cursor: pointer;
       }
-      .zone-controls button.play-here.on {
+      .source-buttons {
+        display: flex;
+        gap: 0.4rem;
+      }
+      .source-btn.on.jukebox {
         background: var(--accent);
         color: #0a0a0a;
         border-color: var(--accent);
+      }
+      .source-btn.on.alerts {
+        background: #ffb347;
+        color: #0a0a0a;
+        border-color: #ffb347;
+      }
+      .source-btn.on.silence {
+        background: #64748b;
+        color: #fff;
+        border-color: #64748b;
       }
       .zone-controls .mute-btn.muted {
         color: var(--accent);
