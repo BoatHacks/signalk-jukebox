@@ -637,25 +637,28 @@ all-zone fallback, volume duck, §2):**
 ## 7. User Interface
 
 - **Web client** — served directly at `/signalk-jukebox` (the
-  "signalk-webapp" static mount), the primary and only playback control
-  surface. This is a real static copy of the minimal hand-rolled UI
-  (`public/index.html`/`app.js`, byte-for-byte identical to
-  `image/webui/jukebox_webui/static/` apart from one `API_BASE` constant
-  pointed at the plugin's real absolute router prefix
-  `/plugins/signalk-jukebox` instead of a relative `..`) — shipped in the
-  npm package itself, not proxied through the container for the page
-  load. The API calls it makes (`.../mopidy/rpc`, `.../api/zones`) still
-  go through the plugin's reverse proxy/REST routes as before; only the
-  static HTML/CSS/JS no longer needs the container to be up at all to
-  load, which a redirect-to-the-proxied-copy design didn't offer (a
-  container not yet ready 503'd the page itself, not just its data). The
-  intended client is **Iris** (§12): search, browse library, queue,
-  playlists, no SignalK-specific modifications needed. Currently
-  substituted — confirmed by build-testing that Iris doesn't load against
-  the Mopidy version this project requires (§12, §13) — offering only
-  transport controls, volume, and a "play this URI" box, with no
-  search/browse/queue/playlist management. Swap back to Iris once it
-  publishes a compatible release.
+  "signalk-webapp" static mount): the primary, authenticated playback
+  control surface, shipped as static files in the npm package itself
+  (`public/index.html`/`app.js`), not proxied through the container for
+  the page load — only its API calls (`.../mopidy/rpc`, `.../api/zones`)
+  go through the plugin's reverse proxy/REST routes, so the page itself
+  loads even if the container isn't up yet (a container not yet ready
+  503'd the whole page under an earlier redirect-to-the-container design,
+  not just its data). Transport controls, volume, per-zone mute/play-here,
+  and a "play this URI" box (replaces track-directory extensions this UI
+  doesn't have, e.g. TuneIn) — no library browse/search/playlist
+  management.
+- **Mopidy's own web client**, for the library browse/search/queue/
+  playlist management the plugin's own webapp above doesn't have. The
+  intended client is **Iris** (§12), no SignalK-specific modifications
+  needed. Currently substituted with Mopidy-MusicBox-Webclient —
+  confirmed by build-testing that Iris doesn't load against the Mopidy
+  version this project requires (§12, §13). Unlike the plugin's own
+  webapp, this one is NOT reverse-proxied: its UI runs entirely over
+  Mopidy's WebSocket endpoint, which this plugin's proxy can't forward
+  (§2.2 in ARCHITECTURE.md) — it's reached directly on the LAN at this
+  host's own `MOPIDY_PORT`, bypassing SignalK's auth for that one
+  connection. Swap back to Iris once it publishes a compatible release.
 - **SignalK Admin config panel** (this plugin, using
   `signalk-container-helper/ui` building blocks) — container status card,
   image-version dropdown + update controls, backend enable/disable
@@ -813,13 +816,27 @@ all-zone fallback, volume duck, §2):**
   that Mopidy 4.x removed, and Iris tracks this as an open, unresolved
   upstream issue ([jaedb/Iris#999](https://github.com/jaedb/Iris/issues/999)).
   Since this project's Mopidy-Spotify dependency (§5) needs Mopidy ≥4.0,
-  Iris is temporarily replaced with a minimal hand-rolled substitute
-  (`image/webui` — a small custom Mopidy extension serving transport/
-  volume/play-URI controls against Mopidy's existing JSON-RPC, using the
-  same `http:app` registry mechanism Iris itself uses) rather than
-  blocking on an upstream fix with no ETA. Swap back once Iris publishes a
-  Mopidy-4-compatible release — nothing about this plugin's own state
-  store or interfaces depends on which web client is mounted.
+  Iris is temporarily replaced with Mopidy-MusicBox-Webclient (registers
+  via the same `http:app` mechanism Iris itself uses) rather than blocking
+  on an upstream fix with no ETA — confirmed by build-testing (and a
+  GitHub code search of its whole repo) that, unlike Iris/TuneIn, it
+  doesn't touch `mopidy.internal`/`mopidy.models.serialize` anywhere, so
+  it loads cleanly against Mopidy 4. It needs one separate, unrelated fix
+  of its own: its `__init__.py` does `import pkg_resources` for its
+  version string, and setuptools≥80 (current PyPI) no longer ships
+  `pkg_resources` at all, so `image/Dockerfile` pins `setuptools<80`
+  ahead of installing it. Its UI is entirely WebSocket-driven with no HTTP
+  fallback (confirmed by reading its whole JS source), so — unlike the
+  polling-based UI it replaced — it can't be reverse-proxied through this
+  plugin (proxy.ts has no access to the raw `http.Server` a WS-upgrade
+  forward needs) and is published straight to the LAN instead
+  (`container.ts`'s `ports`), bypassing SignalK's own auth for that one
+  connection — an accepted trade-off, chosen explicitly after confirming
+  neither SignalK's plugin API nor the loopback-only
+  `signalkAccessiblePorts` mechanism has any WS-proxying path. Swap back
+  once Iris publishes a Mopidy-4-compatible release — nothing about this
+  plugin's own state store or interfaces depends on which web client is
+  mounted.
 - **Combined Mopidy+Snapserver image over two containers** — one
   `ManagedContainer` instance, one lifecycle, no inter-container network
   wiring to get wrong; matches the precedent set by signalk-wyoming's

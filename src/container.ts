@@ -6,9 +6,10 @@ import {
 import type { PluginSettings } from "./types.js";
 
 // The custom signalk-jukebox container image (ARCHITECTURE.md §2.4): Mopidy
-// + a minimal built-in web UI + Snapserver in one image, built from
+// + Mopidy-MusicBox-Webclient + Snapserver in one image, built from
 // image/Dockerfile (build-tested; see that file's header for why Mopidy-Iris
-// isn't used -- incompatible with the Mopidy 4.x this image needs). Snapserver
+// isn't used -- incompatible with the Mopidy 4.x this image needs, and for
+// why Mopidy-MusicBox-Webclient needs a setuptools<80 pin). Snapserver
 // is pinned >= 0.33.0 so the plugin can create/remove per-zone airplay
 // streams at runtime (SPEC.md §6.4, §13) -- no static AirPlay stream pool to
 // configure here.
@@ -49,14 +50,16 @@ export function buildJukeboxConfig(
   return {
     image: JUKEBOX_IMAGE,
     tag,
-    // Mopidy HTTP/JSON-RPC + the minimal built-in web UI (image/webui),
-    // reverse-proxied by the plugin (ARCHITECTURE.md §2.2). Snapcast's
-    // ports are NOT declared here -- signalkAccessiblePorts is a
-    // different, loopback-only mechanism (confirmed by reading
-    // signalk-container-helper's own types: the resulting host binding
-    // is 127.0.0.1, for signalk-server's own proxying use, per
-    // `resolveContainerAddress`) that would not make Snapcast reachable
-    // from the LAN even if listed here. See `ports` below instead.
+    // Mopidy HTTP/JSON-RPC + Mopidy-MusicBox-Webclient (image/Dockerfile,
+    // ARCHITECTURE.md §2.4) run on MOPIDY_PORT. signalkAccessiblePorts binds
+    // it loopback-only, on a host port signalk-container-helper picks
+    // dynamically (confirmed by reading signalk-container-helper's own
+    // types: the resulting binding is 127.0.0.1:<dynamic>, resolved after
+    // the fact via `resolveContainerAddress`) -- this plugin's OWN internal
+    // MopidyClient (index.ts) and the readiness prober below use that.
+    // It's deliberately NOT how the web client itself is reached: see the
+    // `ports` entry below instead, a second, independent, FIXED-host-port
+    // binding of the same container port for that.
     //
     // Omitted entirely under host networking: confirmed against a real
     // production instance that signalk-container discards `networkMode`
@@ -79,14 +82,33 @@ export function buildJukeboxConfig(
     // own SnapserverClient (running on this same host) needs it, and it
     // has no authentication of its own (SPEC.md §6) to justify wider
     // exposure.
+    //
+    // MOPIDY_PORT is published here too, deliberately, alongside (not
+    // instead of) signalkAccessiblePorts above -- the web client
+    // (Mopidy-MusicBox-Webclient) is entirely WebSocket-driven
+    // (Mopidy.js /mopidy/ws), and this plugin's own reverse proxy
+    // (proxy.ts) can't forward a WS upgrade at all (no access to the raw
+    // http.Server via registerWithRouter's Express Router -- confirmed
+    // against SignalK's plugin API and signalk-container-helper's types,
+    // neither exposes one). The only way the browser's WS connection
+    // actually completes is a direct connection to the container's own
+    // port, bypassing SignalK's proxy and its auth entirely. Accepted
+    // trade-off (SPEC.md §6 security note): Mopidy has no auth of its own
+    // either way, same as the Snapcast control port above, but this
+    // binding is reachable from the whole LAN, not just this host --
+    // whoever asked for this swap chose that explicitly, after
+    // confirming both signalk-server's plugin API and the loopback-only
+    // signalkAccessiblePorts mechanism have no WS-proxying path.
     // `ports` is ignored once `networkMode` is set (signalk-container-
     // helper's own type docs), so only declare it when NOT using host
-    // networking.
+    // networking; under host networking MOPIDY_PORT is already the
+    // host's own port with no publishing needed at all.
     ports: hostNetworking
       ? undefined
       : {
           [`${SNAPCAST_STREAM_PORT}/tcp`]: `0.0.0.0:${SNAPCAST_STREAM_PORT}`,
           [`${SNAPCAST_CONTROL_PORT}/tcp`]: `127.0.0.1:${SNAPCAST_CONTROL_PORT}`,
+          [`${MOPIDY_PORT}/tcp`]: `0.0.0.0:${MOPIDY_PORT}`,
         },
     // AirPlay discovery (mDNS) and each per-zone receiver's own
     // dynamically-chosen RTSP/RTP ports don't traverse the bridge/NAT
@@ -157,8 +179,12 @@ export function createManagedContainer({
     // signalk-container-helper's readiness prober sends -- using it here
     // meant the container never registered as ready, container.start()
     // never resolved an address, and the reverse proxy (proxy.ts) stayed
-    // permanently 503. image/webui's own static index (always mounted,
-    // §2.4) answers GET with a real 200 and needs no JSON body.
+    // permanently 503. Mopidy-MusicBox-Webclient's own static index
+    // (always mounted, §2.4) answers GET with a real 200 and needs no
+    // JSON body -- pointed at the file directly (not the bare
+    // "/musicbox_webclient/" path, which 301-redirects to it; confirmed
+    // by build-testing that the redirect target itself, not the
+    // redirect, is what actually returns 200).
     //
     // Omitted entirely under host networking: ManagedContainer's own
     // address resolution (resolveAddress, signalk-container-helper's
@@ -175,6 +201,6 @@ export function createManagedContainer({
     // IS this host's own port, nothing to resolve.
     readiness: hostNetworking
       ? undefined
-      : { port: MOPIDY_PORT, path: "/jukebox/" },
+      : { port: MOPIDY_PORT, path: "/musicbox_webclient/index.html" },
   });
 }

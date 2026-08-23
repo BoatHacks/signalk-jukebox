@@ -28,12 +28,12 @@ interface ExpressRouterLike extends RouterLike {
 /**
  * Reverse-proxies every request under this plugin's own router path
  * straight through to the running container's Mopidy HTTP server
- * (ARCHITECTURE.md §2.2) -- covers both the built-in minimal web UI
- * (image/webui, mounted at /jukebox/ inside the container) and Mopidy's
- * own JSON-RPC endpoint (/mopidy/rpc). No path rewriting: Express already
- * strips this router's own mount prefix before the middleware sees
- * req.url, so a request path relative to the plugin's mount point maps
- * 1:1 onto the same path inside the container.
+ * (ARCHITECTURE.md §2.2) -- Mopidy's own JSON-RPC endpoint (/mopidy/rpc),
+ * for external tooling that wants to reach it through SignalK's own
+ * authenticated port rather than Mopidy's own LAN-published one. No path
+ * rewriting: Express already strips this router's own mount prefix before
+ * the middleware sees req.url, so a request path relative to the plugin's
+ * mount point maps 1:1 onto the same path inside the container.
  *
  * Must be registered AFTER every specific route (registerRoutes(),
  * registerUpdateRoutes()) -- it's a catch-all `.use()` with no path, so
@@ -41,10 +41,17 @@ interface ExpressRouterLike extends RouterLike {
  *
  * WebSocket proxying (Mopidy's /mopidy/ws) is NOT wired up here -- that
  * needs the raw http.Server's 'upgrade' event, which this plugin has no
- * access to via signalk-container-helper's RouterLike. The built-in web
- * UI (image/webui/jukebox_webui/static/app.js) only polls the HTTP
- * JSON-RPC endpoint, so this isn't a gap for it -- revisit before
- * mounting a WS-dependent client (e.g. Iris, once compatible) here.
+ * access to via signalk-container-helper's RouterLike. This is why the
+ * web client (Mopidy-MusicBox-Webclient, image/Dockerfile) is NOT reached
+ * through this proxy at all -- its whole UI runs over that WebSocket
+ * (confirmed by reading its JS source: no HTTP/AJAX fallback anywhere),
+ * so it's published directly to the LAN instead (container.ts's `ports`,
+ * MOPIDY_PORT bound to 0.0.0.0) and the config panel links straight at
+ * that published address, bypassing this proxy and SignalK's own auth for
+ * that connection. Revisit if SignalK's plugin API ever exposes the raw
+ * server (or a sidecar WS proxy is built) -- the whole reason the
+ * built-in web UI this replaced was polling-only in the first place was
+ * to route entirely through this proxy without needing that.
  *
  * `fixRequestBody` is required, not optional (confirmed by build-testing
  * against a real devpod): signalk-server's own body-parsing middleware

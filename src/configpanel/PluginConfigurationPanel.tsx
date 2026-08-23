@@ -22,6 +22,17 @@ import { mergeSettings, type PluginSettings, type Zone } from "../types.js";
 
 const BASE = "/plugins/signalk-jukebox";
 
+// Mirrors container.ts's own MOPIDY_PORT (not imported -- that module pulls
+// in signalk-container-helper's Node-only ManagedContainer machinery, which
+// doesn't belong in this Module Federation bundle). The web client
+// (Mopidy-MusicBox-Webclient, image/Dockerfile) is reached directly against
+// this published port, not through this plugin's own reverse proxy -- its
+// UI is entirely WebSocket-driven (Mopidy.js /mopidy/ws), and proxy.ts can't
+// forward a WS upgrade (no access to the raw http.Server via
+// registerWithRouter's Express Router). `window.location.hostname` gives the
+// same LAN-reachable host this admin page itself was loaded from.
+const MOPIDY_PORT = 6680;
+
 interface PlaybackStatus {
   state?: string;
   track?: { name?: string; artist?: string };
@@ -91,7 +102,12 @@ export default function PluginConfigurationPanel({
         }
         state={loading ? undefined : reachable ? "ok" : "error"}
         link={
-          reachable ? { href: `${BASE}/jukebox/`, label: "Open ↗" } : undefined
+          reachable
+            ? {
+                href: `http://${window.location.hostname}:${MOPIDY_PORT}/musicbox_webclient/`,
+                label: "Open ↗",
+              }
+            : undefined
         }
       />
 

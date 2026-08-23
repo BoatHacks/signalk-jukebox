@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- Replaced the minimal built-in web UI (`image/webui`) with
+  Mopidy-MusicBox-Webclient, giving library browse/search/queue/playlist
+  management the hand-rolled substitute never had — the closer stand-in
+  for Iris while it remains incompatible with Mopidy 4.x
+  (jaedb/Iris#999). Confirmed by build-testing that, unlike Iris/TuneIn,
+  it doesn't touch the Mopidy-3-era internals Mopidy 4 removed;
+  `image/Dockerfile` pins `setuptools<80` for a separate, unrelated
+  `pkg_resources` import it still relies on. Its UI is entirely
+  WebSocket-driven, which this plugin's reverse proxy can't forward, so
+  it's published directly to the LAN (`container.ts`) instead of being
+  reverse-proxied — the config panel's "Open" link now points there
+  directly. The plugin's own `public/` webapp (playback/zone control, no
+  library features) is unaffected, still reverse-proxied as before.
+
 ## [0.0.14] - 2026-08-23
 
 ### Fixed

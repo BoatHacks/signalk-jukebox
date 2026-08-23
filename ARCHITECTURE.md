@@ -4,10 +4,14 @@
 
 signalk-jukebox is a SignalK Node.js plugin that manages one containerized
 image (Mopidy + Snapserver) via `signalk-container-helper`'s
-`ManagedContainer`, reverse-proxies Mopidy's web client for playback
-control (intended to be Iris; currently a minimal built-in substitute,
-SPEC.md §7/§12), and exposes zone volume/mute, image updates, and
-NMEA2000/Fusion-Link connectivity through a SignalK Admin config panel.
+`ManagedContainer`, reverse-proxies Mopidy's JSON-RPC endpoint for the
+plugin's own authenticated `public/` webapp (playback/zone control, no
+library browse/search), and separately publishes Mopidy's own web client
+for library browse/search/playlists (intended to be Iris; currently
+Mopidy-MusicBox-Webclient, reached directly on the LAN rather than
+proxied — SPEC.md §7/§12), and exposes zone volume/mute, image updates,
+and NMEA2000/Fusion-Link connectivity through a SignalK Admin config
+panel.
 
 The plugin's own process is not just a container manager — it hosts a
 **canonical state store** (§2.1) that every interface (Mopidy adapter,
@@ -39,7 +43,7 @@ command from any one of them is visible everywhere else (SPEC.md §3.2).
 │  │ signalk-jukebox container                  │                    │
 │  │  ┌────────────┐   ┌────────────┐          │                    │
 │  │  │  Mopidy    │──▶│ Snapserver │◀─────────┼── raw TCP JSON-RPC  │
-│  │  │ (+ webui)  │   │            │          │   (zone volume/mute)│
+│  │  │(+webclient)│   │            │          │   (zone volume/mute)│
 │  │  └─────┬──────┘   └─────┬──────┘          │                    │
 │  │        │ read-only      │ :1704/:1705       │                    │
 │  │  ┌─────▼──────┐         │                  │                    │
@@ -110,10 +114,17 @@ other directly) when a command arrives on its interface.
 - Owns the container lifecycle end to end via `ManagedContainer`
   (`start()`, `stop()`, update routes) — follows the exact pattern in
   signalk-container-helper's README "Quick start: a managed container".
-- Reverse-proxies HTTP requests for Mopidy's web interface — currently
-  the minimal built-in UI, Iris once compatible (SPEC.md §7, §12) — at a
-  plugin-owned path, so the browser never needs to know the container's
-  internal port.
+- Reverse-proxies HTTP requests to Mopidy's JSON-RPC endpoint (`/mopidy/
+  rpc`) at a plugin-owned path, so the browser never needs to know the
+  container's internal port — used by the plugin's own `public/` webapp.
+  Mopidy's own web client (currently Mopidy-MusicBox-Webclient, Iris once
+  compatible — SPEC.md §7, §12) is NOT reverse-proxied: its UI runs
+  entirely over a WebSocket (`/mopidy/ws`), and forwarding a WS upgrade
+  needs the raw `http.Server`, which SignalK's plugin API doesn't expose
+  to `registerWithRouter`. It's published directly to the LAN instead
+  (`container.ts`'s `ports`, `MOPIDY_PORT` bound to `0.0.0.0`) and the
+  config panel links straight at that address — bypassing SignalK's own
+  auth for that one connection, an accepted trade-off (§12).
 - **Resolves its own address differently under `airplay.hostNetworking`
   (SPEC.md §12).** The normal path (`signalkAccessiblePorts` +
   `readiness`) can't be used there at all: confirmed against a real
@@ -245,15 +256,28 @@ fixed.
   incompatible with Mopidy 4.x (calls internals it removed); Mopidy's
   built-in `stream` extension still plays direct http(s) URIs without it
   (SPEC.md §5, §12).
-- **No Mopidy-Iris.** Also confirmed incompatible with Mopidy 4.x
-  (tracked upstream as [jaedb/Iris#999](https://github.com/jaedb/Iris/issues/999),
-  unresolved). In its place, `image/webui` — a minimal custom Mopidy
-  extension (same `http:app` registry mechanism Iris itself registers
-  through) serving a small static page against Mopidy's existing
-  JSON-RPC/WS endpoints: transport controls, volume, and a "play this
-  URI" box. Swap back to Iris once it's Mopidy-4-compatible (SPEC.md §7,
-  §12) — nothing else in this architecture depends on which one is
-  mounted.
+- **No Mopidy-Iris.** Confirmed incompatible with Mopidy 4.x (tracked
+  upstream as [jaedb/Iris#999](https://github.com/jaedb/Iris/issues/999),
+  unresolved) — its `mopidy_iris/core.py` imports `mopidy.models.serialize`,
+  a Mopidy-3-era internal Mopidy 4 removed. In its place,
+  Mopidy-MusicBox-Webclient: confirmed by build-testing (and a GitHub code
+  search of its whole repo) that it does NOT touch that internal or
+  `mopidy.internal` anywhere, so it loads cleanly against Mopidy 4 — it
+  registers via the same `http:app` mechanism Iris itself uses, at
+  `/musicbox_webclient/`. It needs one separate, unrelated fix: its
+  `__init__.py` does `import pkg_resources` for its own version string,
+  and setuptools≥80 (current PyPI) dropped `pkg_resources` entirely, so
+  `image/Dockerfile` pins `setuptools<80` ahead of installing it (confirmed
+  working at 79.0.1). Its whole UI runs over Mopidy's WebSocket
+  (`/mopidy/ws`) with no HTTP fallback anywhere in its JS — unlike the
+  polling-based UI it replaced, so it can't go through this plugin's own
+  reverse proxy (proxy.ts has no access to the raw `http.Server` needed to
+  forward a WS upgrade). It's published straight to the LAN instead
+  (`container.ts`'s `ports`, §2.2), an accepted trade-off: Mopidy has no
+  auth of its own regardless, but this is now reachable from anywhere on
+  the LAN, not just this host. Swap back to Iris once it's
+  Mopidy-4-compatible (SPEC.md §7, §12) — nothing else in this
+  architecture depends on which one is mounted.
 - Snapserver, configured to receive Mopidy's audio output as its source
   and expose the Snapcast stream + control API. **The control API is raw
   newline-delimited JSON-RPC over TCP, not HTTP**, confirmed by
@@ -362,7 +386,7 @@ the source of truth for field-level detail, SPEC.md §4 is.
 | Plugin runtime         | Node.js / TypeScript                                                                                                                                 | Matches signalk-container-helper's requirement (Node ≥ 22, ESM) and the rest of the SignalK plugin ecosystem                                                                                                                        |
 | Container helper       | `signalk-container-helper` (`ManagedContainer`)                                                                                                      | Purpose-built for exactly this lifecycle; avoids re-deriving polling/readiness/update-route code every containerized plugin has hand-rolled                                                                                         |
 | Music server           | Mopidy                                                                                                                                               | Extensible backend model (local/radio/Spotify from one server), mature, actively maintained                                                                                                                                         |
-| Web client             | Iris (intended); a minimal built-in substitute currently (`image/webui`)                                                                             | Iris avoids building a competing player UI (SPEC.md §12), but is confirmed incompatible with the Mopidy 4.x this project requires (jaedb/Iris#999, unresolved) — swap back once that's fixed upstream                               |
+| Web client             | Iris (intended); Mopidy-MusicBox-Webclient currently, LAN-direct not proxied                                                                             | Iris avoids building a competing player UI (SPEC.md §12), but is confirmed incompatible with the Mopidy 4.x this project requires (jaedb/Iris#999, unresolved) — swap back once that's fixed upstream                               |
 | Multi-zone audio       | Snapcast (Snapserver in-container, Snapclients external)                                                                                             | Purpose-built for synced multi-zone playback with independent per-zone volume; existing Snapclient images/hardware boaters can deploy independently                                                                                 |
 | AirPlay receiving      | Snapcast's built-in `airplay` stream source type (wraps `shairport-sync` per stream)                                                                 | Reuses Snapcast's own process/mDNS lifecycle management per stream instead of the plugin hand-rolling multiple `shairport-sync` instances (SPEC.md §12)                                                                             |
 | Canonical state store  | In-process `EventEmitter`-backed object, no external DB                                                                                              | State is small (playback + a handful of zones), lives entirely for the plugin's own runtime, and needs sub-second propagation to adapters — a database would add latency and an operational dependency for no benefit at this scale |
@@ -569,18 +593,17 @@ signalk-jukebox/
 │   ├── put-handlers.ts         # PUT handling for playback.volume / zones.<id>.volume/muted (§2.8, SPEC.md §6.2)
 │   ├── configpanel/            # React admin panel (signalk-container-helper/ui)
 │   └── types.ts
-├── image/                     # the custom Mopidy+Snapserver+webui container image (build-tested, §2.4)
-│   ├── Dockerfile
+├── image/                     # the custom Mopidy+Snapserver+webclient container image (build-tested, §2.4)
+│   ├── Dockerfile              # pip-installs Mopidy-MusicBox-Webclient (setuptools<80 pinned), substituting for Iris (§2.2, §2.4)
 │   ├── mopidy.conf.template
 │   ├── snapserver.conf.template
-│   ├── entrypoint.sh
-│   └── webui/                 # minimal built-in Mopidy web UI, substituting for Iris (§2.2, §2.4)
+│   └── entrypoint.sh
 ├── image-snapclient/           # this project's own minimal Snapclient-only image (SPEC.md §9, §12)
 │   ├── Dockerfile
 │   └── entrypoint.sh
 ├── public/                    # signalk-webapp keyword's static mount, served directly at /signalk-jukebox
-│   ├── index.html             # the real web UI -- static copy of image/webui, not a redirect (§7)
-│   └── app.js                 # same file as image/webui's, absolute API_BASE instead of relative
+│   ├── index.html             # the plugin's own authenticated playback/zone UI (transport, volume, per-zone mute/play-here, play-URI) -- no library browse/search, unrelated to Mopidy's own web client (§7)
+│   └── app.js
 ├── test/
 └── webpack.config.cjs         # config-panel remote build (ESM, per container-helper's UI notes)
 ```

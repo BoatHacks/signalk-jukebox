@@ -58,8 +58,10 @@ client_secret = ${JUKEBOX_SPOTIFY_CLIENT_SECRET}
 # work even with correct client_id/client_secret. Not something this
 # config can work around.
 
-[jukebox]
-# Minimal built-in web UI (./webui) -- replaces Mopidy-Iris until it
-# publishes a Mopidy-4-compatible release (see Dockerfile's base-image
-# note). Served at /jukebox/ on this same Mopidy HTTP port.
+[musicbox_webclient]
+# Replaces Mopidy-Iris until it publishes a Mopidy-4-compatible release
+# (see Dockerfile's base-image note). Served at /musicbox_webclient/ on
+# this same Mopidy HTTP port, published directly to the LAN by
+# container.ts (not reverse-proxied -- its UI needs a WebSocket this
+# plugin's proxy can't forward).
 enabled = true

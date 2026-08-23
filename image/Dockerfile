@@ -1,5 +1,5 @@
 # The signalk-jukebox container image (ARCHITECTURE.md §2.4): Mopidy +
-# a minimal built-in web UI + Snapserver in one image.
+# Mopidy-MusicBox-Webclient + Snapserver in one image.
 #
 # Base is Debian trixie, not bookworm: Mopidy 4.x (required by the current
 # Mopidy-Spotify 5.0.0, which requires mopidy>=4.0.0) itself requires
@@ -17,14 +17,33 @@
 # still call Mopidy-3-era internals (`mopidy.internal`,
 # `mopidy.models.serialize`) that Mopidy 4 removed -- Iris tracks this as
 # an open, unresolved upstream issue (jaedb/Iris#999), and TuneIn crashes
-# identically. Iris is replaced by ./webui, a tiny custom Mopidy extension
-# (same `http:app` registry mechanism Iris itself uses) serving a minimal
-# hand-rolled playback UI against Mopidy's existing JSON-RPC/WS endpoints
-# -- swap back to Mopidy-Iris once it publishes a Mopidy-4-compatible
-# release. TuneIn (station directory/search) is dropped outright rather
-# than replaced: Mopidy's built-in `stream` extension already plays any
-# http(s) audio URL with no extension at all, which is most of what
-# TuneIn added on top of; only the searchable station directory is lost.
+# identically. TuneIn (station directory/search) is dropped outright:
+# Mopidy's built-in `stream` extension already plays any http(s) audio URL
+# with no extension at all, which is most of what TuneIn added on top of;
+# only the searchable station directory is lost.
+#
+# Iris is replaced by Mopidy-MusicBox-Webclient (registers via the same
+# `http:app` mechanism Iris itself uses, at /musicbox_webclient/) -- unlike
+# Iris/TuneIn, confirmed by build-testing (and a GitHub code search of its
+# whole repo) that it does NOT touch mopidy.internal/models.serialize
+# anywhere, so it loads cleanly against Mopidy 4. It hits one separate,
+# unrelated break instead: its __init__.py does `import pkg_resources` for
+# its own version string, and setuptools >= 80 (current PyPI) dropped
+# pkg_resources entirely -- confirmed by build-testing both that setuptools
+# 84.0.0 lacks it (ModuleNotFoundError, extension fails to load) and that
+# 79.0.1 still has it (loads cleanly). Pinned below for exactly that reason;
+# lift the pin if a future Mopidy-MusicBox-Webclient release drops the
+# pkg_resources import (its own upstream has had no real commit since
+# 2020-06-23, so don't expect that soon).
+#
+# Its web UI is entirely WebSocket-driven (Mopidy.js /mopidy/ws, confirmed
+# by reading its whole JS source: zero HTTP/AJAX fallback anywhere) --
+# unlike the polling-based UI it replaces, it can't be reached through this
+# plugin's own reverse proxy (proxy.ts can't forward a WS upgrade; see that
+# file). container.ts instead publishes MOPIDY_PORT directly to the LAN
+# (0.0.0.0), and the config panel links straight at that -- bypassing
+# SignalK's own auth for this port, an accepted trade-off (Mopidy has none
+# of its own either way; see container.ts's own comment on this).
 
 FROM debian:trixie-slim AS base
 
@@ -54,9 +73,12 @@ RUN pip install --no-cache-dir --break-system-packages \
         Mopidy-Local \
         Mopidy-Spotify
 
-# --- Minimal built-in web UI (./webui) -- see base-image note above -------
-COPY webui /app/webui
-RUN pip install --no-cache-dir --break-system-packages /app/webui
+# --- Web client (Mopidy-MusicBox-Webclient) -- see base-image note above --
+# setuptools<80 pinned first: Mopidy-MusicBox-Webclient's __init__.py does
+# `import pkg_resources`, which setuptools>=80 no longer ships.
+RUN pip install --no-cache-dir --break-system-packages \
+        "setuptools<80" \
+        Mopidy-MusicBox-Webclient
 
 # --- Snapserver (GitHub release .deb) --------------------------------------
 # Pinned >= 0.33.0 deliberately (SPEC.md §13, ARCHITECTURE.md §5): the
