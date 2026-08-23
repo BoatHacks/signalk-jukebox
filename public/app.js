@@ -185,8 +185,24 @@ function buildZoneRow(zone) {
   const volumeValue = row.querySelector(".volume-value");
   const muteBtn = row.querySelector(".mute-btn");
 
+  // A toggle, not a one-way switch: while this zone is already playing the
+  // jukebox stream unmuted, clicking again turns it off (mutes it) rather
+  // than doing nothing -- the only other source a zone can hold
+  // (per-zone AirPlay) is switched to automatically on connect, never
+  // manually (routes.ts), so "off" here means "stop this zone hearing the
+  // jukebox stream", which is what muting it actually does.
   playBtn.addEventListener("click", async () => {
-    await zonePost(zone.id, "source", { source: "jukebox" });
+    const entry = zoneRows.get(zone.id);
+    const isPlayingHere =
+      entry.lastActiveSource === "jukebox" && !entry.lastMuted;
+    if (isPlayingHere) {
+      await zonePost(zone.id, "mute", { muted: true });
+    } else {
+      await zonePost(zone.id, "source", { source: "jukebox" });
+      if (entry.lastMuted) {
+        await zonePost(zone.id, "mute", { muted: false });
+      }
+    }
     refreshZones();
   });
 
@@ -222,6 +238,7 @@ function buildZoneRow(zone) {
     volumeValue,
     muteBtn,
     lastMuted: false,
+    lastActiveSource: undefined,
   };
 }
 
@@ -231,8 +248,10 @@ function updateZoneRow(entry, zone) {
   entry.sourceBadge.textContent =
     zone.activeSource === "jukebox" ? "Jukebox" : "AirPlay";
   entry.sourceBadge.className = `zone-source ${zone.activeSource}`;
-  entry.playBtn.disabled = zone.activeSource === "jukebox";
-  entry.playBtn.classList.toggle("play-here", true);
+  entry.lastActiveSource = zone.activeSource;
+  const isPlayingHere = zone.activeSource === "jukebox" && !zone.muted;
+  entry.playBtn.textContent = isPlayingHere ? "Stop" : "Play here";
+  entry.playBtn.classList.toggle("on", isPlayingHere);
   if (!draggingZoneVolumes.has(zone.id)) {
     entry.volumeInput.value = zone.volume;
     entry.volumeValue.textContent = `${zone.volume}%`;
