@@ -544,8 +544,9 @@ signalk-jukebox/
 ├── image-snapclient/           # this project's own minimal Snapclient-only image (SPEC.md §9, §12)
 │   ├── Dockerfile
 │   └── entrypoint.sh
-├── public/                    # signalk-webapp keyword's static mount: a redirect shim to the
-│   └── index.html             # proxied web UI, so the plugin is discoverable in the webapps list/App Dock
+├── public/                    # signalk-webapp keyword's static mount, served directly at /signalk-jukebox
+│   ├── index.html             # the real web UI -- static copy of image/webui, not a redirect (§7)
+│   └── app.js                 # same file as image/webui's, absolute API_BASE instead of relative
 ├── test/
 └── webpack.config.cjs         # config-panel remote build (ESM, per container-helper's UI notes)
 ```

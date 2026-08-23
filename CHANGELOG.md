@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.0.8] - 2026-08-23
+
+### Changed
+
+- `/signalk-jukebox` (the webapps/App Dock entry) now serves the web
+  player directly instead of redirecting into the reverse-proxied
+  `/plugins/signalk-jukebox/jukebox/` copy. It's a static duplicate of
+  the same UI (`public/index.html`/`app.js`, shipped in the npm package
+  itself) with one difference: an absolute API base
+  (`/plugins/signalk-jukebox`) instead of the container-served copy's
+  relative one, since this page's own URL has nothing to do with where
+  the plugin's router is mounted. Side benefit: the page itself now
+  loads even before the container is ready — a redirect into the old
+  proxied-only copy 503'd the whole page, not just its data, whenever
+  the container wasn't up yet.
+
 ## [0.0.7] - 2026-08-23
 
 ### Fixed
@@ -117,7 +133,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Fixed
 
 - Config panel crash (`Cannot read properties of undefined (reading
-  'enabled')`) on a partially-populated saved config, e.g. one saved
+'enabled')`) on a partially-populated saved config, e.g. one saved
   before a later settings group was added.
 
 ## [0.0.1] - 2026-08-22

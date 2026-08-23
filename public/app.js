@@ -1,17 +1,15 @@
-// Relative, not "/mopidy/rpc" -- this page is served from the container's
-// own /jukebox/ when hit directly, but from .../jukebox/ behind an
-// arbitrary mount prefix when reverse-proxied (e.g. this project's own
-// plugin, src/proxy.ts). An absolute path resolves against the browser's
-// current origin and skips any such proxy prefix entirely; confirmed by
-// build-testing (SPEC.md §13) that this showed as a permanently
-// "Disconnected" UI despite the container and proxy both actually being
-// healthy. ".." resolves correctly in both cases.
+// This copy is served statically by signalk-server itself at
+// /signalk-jukebox/ (the "signalk-webapp" mount, public/index.html) --
+// not reverse-proxied through the container the way
+// image/webui/jukebox_webui/static/app.js's identically-named IDs and
+// markup are. API_BASE is a real absolute path (not ".."), since this
+// page's own URL has nothing to do with where the plugin's router is
+// mounted: it always needs /plugins/signalk-jukebox regardless.
 //
-// public/app.js (this plugin's own npm package, served statically at
-// /signalk-jukebox/ via the "signalk-webapp" mount) is the same file with
-// a different API_BASE -- keep the two in sync on any change beyond that
-// one constant.
-const API_BASE = "..";
+// image/webui/jukebox_webui/static/app.js is the same file with a
+// different (relative) API_BASE -- keep the two in sync on any change
+// beyond that one constant.
+const API_BASE = "/plugins/signalk-jukebox";
 const RPC_URL = `${API_BASE}/mopidy/rpc`;
 let rpcId = 0;
 

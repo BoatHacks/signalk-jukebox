@@ -609,15 +609,26 @@ all-zone fallback, volume duck, §2):**
 
 ## 7. User Interface
 
-- **Web client** — reverse-proxied at `/signalk-jukebox` (or similar), the
-  primary and only playback control surface. The intended client is
-  **Iris** (§12): search, browse library, queue, playlists, no
-  SignalK-specific modifications needed. Currently substituted with a
-  minimal hand-rolled UI (`image/webui`) — confirmed by build-testing that
-  Iris doesn't load against the Mopidy version this project requires
-  (§12, §13) — offering only transport controls, volume, and a "play this
-  URI" box, with no search/browse/queue/playlist management. Swap back to
-  Iris once it publishes a compatible release.
+- **Web client** — served directly at `/signalk-jukebox` (the
+  "signalk-webapp" static mount), the primary and only playback control
+  surface. This is a real static copy of the minimal hand-rolled UI
+  (`public/index.html`/`app.js`, byte-for-byte identical to
+  `image/webui/jukebox_webui/static/` apart from one `API_BASE` constant
+  pointed at the plugin's real absolute router prefix
+  `/plugins/signalk-jukebox` instead of a relative `..`) — shipped in the
+  npm package itself, not proxied through the container for the page
+  load. The API calls it makes (`.../mopidy/rpc`, `.../api/zones`) still
+  go through the plugin's reverse proxy/REST routes as before; only the
+  static HTML/CSS/JS no longer needs the container to be up at all to
+  load, which a redirect-to-the-proxied-copy design didn't offer (a
+  container not yet ready 503'd the page itself, not just its data). The
+  intended client is **Iris** (§12): search, browse library, queue,
+  playlists, no SignalK-specific modifications needed. Currently
+  substituted — confirmed by build-testing that Iris doesn't load against
+  the Mopidy version this project requires (§12, §13) — offering only
+  transport controls, volume, and a "play this URI" box, with no
+  search/browse/queue/playlist management. Swap back to Iris once it
+  publishes a compatible release.
 - **SignalK Admin config panel** (this plugin, using
   `signalk-container-helper/ui` building blocks) — container status card,
   image-version dropdown + update controls, backend enable/disable
