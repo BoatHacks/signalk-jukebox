@@ -507,6 +507,24 @@ export default function PluginConfigurationPanel({
                 <code>plughw:CARD=wm8960soundcard,DEV=0</code>).
               </div>
             )}
+            <FieldRow
+              label="Zone name"
+              hint="shown in the zone list and REST API in place of the raw container id"
+            >
+              <input
+                style={S.input}
+                value={localSnapclient.zoneName}
+                onChange={(e) =>
+                  patch({
+                    localSnapclient: {
+                      ...localSnapclient,
+                      zoneName: e.target.value,
+                    },
+                  })
+                }
+                placeholder="Local speakers"
+              />
+            </FieldRow>
             <FieldRow label="Image version">
               <input
                 style={S.input}

@@ -17,6 +17,15 @@ export const LOCAL_SNAPCLIENT_IMAGE =
   "ghcr.io/boathacks/signalk-jukebox-snapclient";
 export const LOCAL_SNAPCLIENT_CONTAINER_NAME = "jukebox-snapclient";
 
+/** Fixed Snapcast client id (image-snapclient/entrypoint.sh's --hostID),
+ * NOT the display name -- confirmed by hand that --hostID only overrides
+ * `client.id`, not `client.host.name` (the fallback Snapcast shows when
+ * no name has been set, e.g. "16684a3df93c", a podman-assigned container
+ * hostname). Fixing this id is what lets renameLocalSnapclientZone find
+ * "the" local snapclient's zone deterministically -- there is always
+ * exactly one per plugin instance. */
+export const LOCAL_SNAPCLIENT_HOST_ID = "jukebox-local-snapclient";
+
 /** In-container alias for the Signal K host (extraHosts host-gateway) --
  * the same mechanism signalk-wyoming's local-satellite.ts uses to reach
  * the host reliably. Confirmed needed by hand: connecting a separate
@@ -37,6 +46,9 @@ export interface LocalSnapclientConfig {
    * session. */
   soundCard: string;
   tag: string;
+  /** Human-readable zone name (Snapcast's Client.SetName -- see
+   * renameLocalSnapclientZone below). */
+  zoneName: string;
 }
 
 export interface LocalSnapclientBuildInputs {
@@ -121,5 +133,66 @@ export function createLocalSnapclient(
     async stop(): Promise<void> {
       await container.stop();
     },
+  };
+}
+
+/** Minimal shape this needs from SnapserverClient (avoids a hard import --
+ * mirrors zone-sync.ts's own SnapGroup/SnapClient structural typing). */
+export interface RenameableSnapserverClient {
+  getGroups(): Promise<{ clients: { id: string }[] }[]>;
+  setClientName(clientId: string, name: string): Promise<void>;
+}
+
+/**
+ * Waits for the local snapclient's fixed, known Snapcast client id
+ * (LOCAL_SNAPCLIENT_HOST_ID) to show up as a connected zone, then sets its
+ * display name once (SPEC.md §9). Client.SetName persists server-side
+ * across reconnects, so this only needs to succeed once per plugin start,
+ * not on every zone-sync poll tick -- unlike zone-sync.ts, which
+ * continuously reconciles state that can change at any time, this is a
+ * one-shot action once the precondition (the client exists) is met.
+ *
+ * Polls independently of zone-sync.ts rather than piggybacking on it:
+ * the container can take a few seconds to connect after start(), and this
+ * has nothing to do with zone-sync's own responsibility (mirroring
+ * Snapserver's canonical state into the store) -- it would be an odd fit
+ * bolted onto that loop's per-tick logic.
+ */
+export function renameLocalSnapclientZone(
+  snapserver: RenameableSnapserverClient,
+  zoneName: string,
+  {
+    intervalMs = 2000,
+    maxAttempts = 30,
+  }: { intervalMs?: number; maxAttempts?: number } = {},
+): () => void {
+  let stopped = false;
+  let timer: NodeJS.Timeout | undefined;
+
+  const tick = async (attempt: number): Promise<void> => {
+    if (stopped) return;
+    try {
+      const groups = await snapserver.getGroups();
+      const found = groups.some((g) =>
+        g.clients.some((c) => c.id === LOCAL_SNAPCLIENT_HOST_ID),
+      );
+      if (found) {
+        await snapserver.setClientName(LOCAL_SNAPCLIENT_HOST_ID, zoneName);
+        return;
+      }
+    } catch {
+      // Transient/unreachable -- retry on the next tick, same as
+      // zone-sync.ts's own tolerance for a not-yet-ready Snapserver.
+    }
+    if (!stopped && attempt + 1 < maxAttempts) {
+      timer = setTimeout(() => void tick(attempt + 1), intervalMs);
+    }
+  };
+
+  void tick(0);
+
+  return () => {
+    stopped = true;
+    if (timer) clearTimeout(timer);
   };
 }

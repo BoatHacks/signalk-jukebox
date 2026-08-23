@@ -673,6 +673,7 @@ all-zone fallback, volume duck, §2):**
 | `localSnapclient.enabled`                     | `false`                         | Runs a second, optional managed container (`local-snapclient.ts`, §12) -- a Snapclient zone on this SignalK server's own sound card, for speakers wired directly to that machine rather than a separate physical device                                                                                                                     |
 | `localSnapclient.soundCard`                   | `""`                            | ALSA device string (e.g. `plughw:CARD=wm8960soundcard,DEV=0`); required when enabled, no "auto" fallback -- a bare "default" device is ambiguous on a host with more than one sound card and fails outright (confirmed by build-testing)                                                                                                    |
 | `localSnapclient.tag`                         | `"auto"`                        | Image tag for `ghcr.io/boathacks/signalk-jukebox-snapclient`, this project's own minimal Snapclient-only image                                                                                                                                                                                                                              |
+| `localSnapclient.zoneName`                    | `"Local speakers"`              | Display name set via Snapcast's `Client.SetName` (§12) once the local snapclient connects -- without this, the zone falls back to Snapcast's own default of the client's raw container hostname (e.g. `16684a3df93c`), confirmed by build-testing                                                                                          |
 
 ## 10. MVP Scope
 
@@ -1039,8 +1040,18 @@ all-zone fallback, volume duck, §2):**
   so the operator must supply an explicit device string from their own
   `aplay -L` output. Once connected, this zone is discovered exactly
   like any other Snapclient (SPEC.md §2's read-only zone
-  auto-discovery) — no special-cased UI beyond starting/stopping the
-  container and picking its sound card.
+  auto-discovery) — the one special case is its display name
+  (`localSnapclient.zoneName`, §9): without it, the zone shows up as the
+  container's raw, unreadable hostname (Snapcast's own fallback when no
+  name has been set — e.g. `16684a3df93c`, a podman-assigned id).
+  Confirmed by hand that snapclient's own `--hostID` flag does NOT fix
+  this — it only overrides the client's unique *id*, not its *display
+  name* — so `image-snapclient/entrypoint.sh` instead pins `--hostID` to
+  a fixed, known sentinel (`jukebox-local-snapclient`) purely so the
+  plugin can find this one deterministic zone once it connects, and
+  separately calls Snapcast's own `Client.SetName` RPC on it with the
+  configured `zoneName` — the same mechanism a Snapweb UI uses to rename
+  any zone, which persists server-side across reconnects.
 
 ## 13. Open Questions
 

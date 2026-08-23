@@ -17,7 +17,10 @@ import {
 import { registerMopidyProxy, type MopidyProxyState } from "./proxy.js";
 import { SnapserverClient } from "./snapserver-client.js";
 import { startZoneSync } from "./zone-sync.js";
-import { createLocalSnapclient } from "./local-snapclient.js";
+import {
+  createLocalSnapclient,
+  renameLocalSnapclientZone,
+} from "./local-snapclient.js";
 import { publishStateChanges, type AppLike } from "./paths.js";
 import { MopidyClient } from "./mopidy-client.js";
 import { registerPlaybackControls, type ControlsAppLike } from "./controls.js";
@@ -61,6 +64,7 @@ export default function plugin(app: App) {
   let stopZoneSync: (() => void) | null = null;
   let stopPlaybackControls: (() => void) | null = null;
   let stopZonePutHandlers: (() => void) | null = null;
+  let stopLocalSnapclientRename: (() => void) | null = null;
   // Filled in once container.start() resolves an address (registerWithRouter
   // runs synchronously before that) -- see proxy.ts.
   const proxyState: MopidyProxyState = { address: null };
@@ -124,6 +128,19 @@ export default function plugin(app: App) {
         snapserverState.client = snapserverClient;
         stopZoneSync = startZoneSync(store, snapserverClient);
 
+        // The local snapclient's zone starts out named after its raw
+        // container hostname (Snapcast's own fallback when no name has
+        // been set) -- give it the configured human-readable name once
+        // it actually connects. Runs against the MAIN container's
+        // Snapserver (the only one with a control API), independent of
+        // the local-snapclient container's own startSafely below.
+        if (settings.localSnapclient.enabled) {
+          stopLocalSnapclientRename = renameLocalSnapclientZone(
+            snapserverClient,
+            settings.localSnapclient.zoneName,
+          );
+        }
+
         // address is non-null here: readiness IS configured (container.ts),
         // so a resolved start() always carries one (StartResult's doc
         // comment) -- guarded anyway since the type is nullable.
@@ -169,6 +186,8 @@ export default function plugin(app: App) {
       stopPlaybackControls = null;
       stopZonePutHandlers?.();
       stopZonePutHandlers = null;
+      stopLocalSnapclientRename?.();
+      stopLocalSnapclientRename = null;
       snapserverState.client = null;
       mopidyState.client = null;
       proxyState.address = null;
@@ -327,6 +346,11 @@ export default function plugin(app: App) {
               type: "string",
               title:
                 'ALSA device (required when enabled, e.g. "plughw:CARD=wm8960soundcard,DEV=0" -- see this host\'s `aplay -L` output)',
+            },
+            zoneName: {
+              type: "string",
+              default: "Local speakers",
+              title: "Zone name",
             },
             tag: { type: "string", default: "auto", title: "Image version" },
           },

@@ -6,6 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.0.6] - 2026-08-23
+
+### Added
+
+- `localSnapclient.zoneName` (default `"Local speakers"`), editable in
+  the config panel's Local Snapclient section.
+
+### Fixed
+
+- The local snapclient zone showing up as an unreadable raw container id
+  (e.g. `16684a3df93c`) instead of a human-readable name. Root cause:
+  Snapcast's zone display name falls back to the client's raw hostname
+  when no name has been explicitly set, and nothing ever set one.
+  `snapclient --hostID` was confirmed by hand to NOT fix this — it only
+  overrides the client's unique id, not its display name. Fixed by
+  pinning `--hostID` to a fixed sentinel (`image-snapclient`'s
+  entrypoint, requires the `signalk-jukebox-snapclient:latest` image
+  republished with this change) purely so the plugin can find this one
+  deterministic zone once it connects, then calling Snapcast's own
+  `Client.SetName` on it with the configured `zoneName`.
+
 ## [0.0.5] - 2026-08-23
 
 ### Added

@@ -153,6 +153,11 @@ export interface PluginSettings {
      * local-snapclient.ts's own doc comment for why). */
     soundCard: string;
     tag: string;
+    /** Human-readable zone name (Snapcast's Client.SetName, SPEC.md §9) --
+     * without this, the zone falls back to Snapcast's own default of
+     * the client's raw hostname (e.g. "16684a3df93c", a podman-assigned
+     * container id), confirmed by build-testing. */
+    zoneName: string;
   };
 }
 
@@ -235,5 +240,6 @@ export const SCHEMA_DEFAULTS: PluginSettings = {
     enabled: false,
     soundCard: "",
     tag: "auto",
+    zoneName: "Local speakers",
   },
 };

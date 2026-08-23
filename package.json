@@ -1,6 +1,6 @@
 {
   "name": "signalk-jukebox",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "EXPERIMENTAL, UNTESTED on a real boat. Whole-boat music playback for SignalK: containerized Mopidy + Snapcast multi-zone audio, NMEA2000/Fusion-Link interop, and per-zone AirPlay receivers, all sharing one live state.",
   "type": "module",
   "main": "dist/index.js",

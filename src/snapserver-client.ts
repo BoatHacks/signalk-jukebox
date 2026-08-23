@@ -213,6 +213,13 @@ export class SnapserverClient {
     });
   }
 
+  /** Sets the user-assignable label `toSnapGroup` prefers over the raw
+   * client hostname (SPEC.md §9) -- persists server-side across
+   * reconnects, same mechanism a Snapweb UI uses to rename any zone. */
+  setClientName(clientId: string, name: string): Promise<void> {
+    return this.call("Client.SetName", { id: clientId, name });
+  }
+
   /** Point an existing group at a different stream (SPEC.md §6.4) --
    * fully dynamic, no restart. This is how a zone switches between the
    * Jukebox stream and its own AirPlay receiver; it does not move
