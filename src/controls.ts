@@ -41,6 +41,52 @@ export interface ControlsAppLike {
   debug?: (msg: string) => void;
 }
 
+/** Separate from ControlsAppLike (registerPlaybackControls's dependency,
+ * a plain subscriber that never publishes anything) since AppLike's
+ * `handleMessage` is required, not optional -- combining the two on one
+ * interface would make ControlsAppLike itself require it too, which
+ * paths.ts's identically-named but structurally different AppLike
+ * conflicts with wherever both are implemented by the same `app` object
+ * (index.ts's own App interface). */
+export interface ControlsMetaAppLike {
+  handleMessage(pluginId: string, delta: unknown): void;
+}
+
+const CONTROL_DESCRIPTIONS: Record<PlaybackControlAction, string> = {
+  play: "Momentary playback control: play (1 = pressed, 0 = released)",
+  pause: "Momentary playback control: pause (1 = pressed, 0 = released)",
+  next: "Momentary playback control: next track (1 = pressed, 0 = released)",
+  previous:
+    "Momentary playback control: previous track (1 = pressed, 0 = released)",
+};
+
+/**
+ * Publishes metadata (no value) for the four controls.* paths so they
+ * show up in the Data Browser / any path picker immediately, rather than
+ * only existing once some external source actually sends the first
+ * delta -- confirmed by a real user report that these paths were
+ * otherwise impossible to find: this plugin only ever *subscribes* to
+ * them (registerPlaybackControls above), and a path with no value and no
+ * meta is invisible to SignalK's data model entirely.
+ */
+export function registerControlsMeta(
+  app: ControlsMetaAppLike,
+  pluginId: string,
+): void {
+  app.handleMessage(pluginId, {
+    updates: [
+      {
+        meta: (
+          Object.keys(PLAYBACK_CONTROL_PATHS) as PlaybackControlAction[]
+        ).map((action) => ({
+          path: PLAYBACK_CONTROL_PATHS[action],
+          value: { description: CONTROL_DESCRIPTIONS[action] },
+        })),
+      },
+    ],
+  });
+}
+
 /** A delta value counts as "pressed" the same way a physical switch path
  * would: any truthy/nonzero value, not strictly `=== 1` -- some sources
  * send booleans, and being lenient here costs nothing. */

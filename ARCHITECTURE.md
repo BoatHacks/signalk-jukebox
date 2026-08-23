@@ -315,6 +315,13 @@ that connects to this container's Snapserver becomes a zone automatically
   its own `MopidyClient` against the container's resolved address once
   `start()` completes, same pattern as `SnapserverClient`/`zone-sync.ts`);
   unsubscribes on plugin `stop()`.
+- Registers meta (no value) for all four paths synchronously in
+  `start()`, independent of the container (`registerControlsMeta`) —
+  confirmed by a real user report that a subscribed-but-never-published
+  path is otherwise invisible in SignalK's own data model (no value, no
+  meta) until some external source sends the first real delta, making
+  these impossible to find in the Data Browser on a system with nothing
+  wired up to press them yet.
 
 ### 2.8 PUT-handler adapter (`src/put-handlers.ts`)
 

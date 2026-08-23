@@ -25,7 +25,11 @@ import {
 } from "./local-snapclient.js";
 import { publishStateChanges, type AppLike } from "./paths.js";
 import { MopidyClient } from "./mopidy-client.js";
-import { registerPlaybackControls, type ControlsAppLike } from "./controls.js";
+import {
+  registerPlaybackControls,
+  registerControlsMeta,
+  type ControlsAppLike,
+} from "./controls.js";
 import {
   registerPlaybackVolumePutHandler,
   registerZonePutHandlers,
@@ -96,6 +100,11 @@ export default function plugin(app: App) {
         snapserverState,
         store,
       );
+      // Meta-only, no value -- makes the controls.* paths discoverable
+      // in the Data Browser immediately, rather than only existing once
+      // some external source (a pushbutton, a webapp) sends the first
+      // real delta (controls.ts's own doc comment).
+      registerControlsMeta(app, jukebox.id);
 
       startSafely(app, async () => {
         let libraryMount: { source: string; containerPath: string } | undefined;

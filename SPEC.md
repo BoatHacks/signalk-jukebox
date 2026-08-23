@@ -429,7 +429,14 @@ use):
 | `entertainment.jukebox.playback.controls.previous` | `0\|1`, momentary, press-edge |
 
 Not PUT-able (there is nothing to read back — a momentary control has no
-resting state worth exposing) and not published by `paths.ts`.
+resting state worth exposing) and not published by `paths.ts`. Since a
+subscriber never sends a delta of its own, these paths would otherwise
+be entirely invisible in SignalK's data model (no value, no meta) until
+some external source used them for the first time — confirmed by a real
+user report that they were impossible to find via the Data Browser on a
+system with nothing wired up yet. `registerControlsMeta` (`src/controls.ts`)
+publishes a one-time meta-only delta (description, no value) for all
+four on plugin start, so they show up immediately regardless.
 
 ### 6.3 NMEA2000 / Fusion-Link Interface
 

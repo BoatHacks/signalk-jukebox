@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import {
   registerPlaybackControls,
+  registerControlsMeta,
   PLAYBACK_CONTROL_PATHS,
   type ControlsAppLike,
   type SelfStream,
@@ -98,5 +99,25 @@ describe("registerPlaybackControls", () => {
     stop();
     emit(PLAYBACK_CONTROL_PATHS.play, 1);
     expect(mopidy.play).not.toHaveBeenCalled();
+  });
+});
+
+describe("registerControlsMeta", () => {
+  it("publishes meta (no value) for all four control paths", () => {
+    const handleMessage = vi.fn();
+    registerControlsMeta({ handleMessage }, "signalk-jukebox");
+
+    expect(handleMessage).toHaveBeenCalledTimes(1);
+    const [pluginId, delta] = handleMessage.mock.calls[0] as [
+      string,
+      { updates: { meta: { path: string; value: unknown }[] }[] },
+    ];
+    expect(pluginId).toBe("signalk-jukebox");
+    const meta = delta.updates[0]!.meta;
+    const paths = meta.map((m) => m.path).sort();
+    expect(paths).toEqual(Object.values(PLAYBACK_CONTROL_PATHS).sort());
+    for (const entry of meta) {
+      expect(entry.value).toHaveProperty("description");
+    }
   });
 });

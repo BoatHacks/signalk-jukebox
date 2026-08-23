@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.0.11] - 2026-08-23
+
+### Fixed
+
+- The four `entertainment.jukebox.playback.controls.*` paths were
+  impossible to find in the Data Browser or any path picker — a real
+  user report. Root cause: the plugin only ever _subscribes_ to them
+  (`controls.ts`), never publishes a value or meta, and a path with
+  neither is entirely invisible in SignalK's data model until some
+  external source sends the first real delta. `registerControlsMeta`
+  now publishes a one-time meta-only delta (description, no value) for
+  all four on plugin start, so they're discoverable immediately even
+  before anything is wired up to press them.
+
 ## [0.0.10] - 2026-08-23
 
 ### Fixed
