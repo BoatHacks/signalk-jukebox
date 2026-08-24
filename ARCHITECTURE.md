@@ -712,12 +712,28 @@ signalk-jukebox/
 
 ## 9. Future Considerations
 
-- **wyoming-satellite as a second zone backend type** — would introduce a
-  `ZoneBackend` seam (Snapcast vs. satellite-control-API) analogous to
-  signalk-wyoming's `Satellite` interface, so the zone list/volume API in
-  §5/SPEC.md §6.1 wouldn't need to change shape, only gain a second
-  implementation behind it. Deferred until wyoming-satellite's control
-  API is stable enough to build against (SPEC.md §13).
+- **wyoming-satellite as a second zone backend type — investigated and
+  shelved, not just deferred.** The idea was a `ZoneBackend` seam
+  (Snapcast vs. satellite-control-API) analogous to signalk-wyoming's
+  `Satellite` interface, so the zone list/volume API in §5/SPEC.md §6.1
+  wouldn't need to change shape, only gain a second implementation behind
+  it. Checked in practice (2026-08-24): `wyoming-satellite` (the project
+  signalk-wyoming targets) is no longer maintained — its own README says
+  it's been replaced by
+  [Linux Voice Assistant](https://github.com/OHF-Voice/linux-voice-assistant),
+  which uses Home Assistant's ESPHome protocol instead of Wyoming.
+  Tellingly, Linux Voice Assistant's own docs list "media player" as a
+  *new* capability over wyoming-satellite (a `--music-output-device` flag
+  backed by `mpv`, exposed as a proper Home Assistant `media_player`
+  entity) — confirming Wyoming's own `wyoming.snd` primitive (piping
+  `AudioChunk` events into a `--snd-command` like `aplay`) was only ever
+  built for short voice-interaction audio (wake/done/timer sounds, TTS
+  replies), not sustained music playback; that's a real protocol gap, not
+  an unbuilt feature. A satellite-as-zone would mean adopting ESPHome +
+  Home Assistant's media-player model instead, an entirely different
+  integration surface than this project's existing SignalK/Snapcast one —
+  not worth pursuing unless/until signalk-wyoming itself moves off
+  wyoming-satellite onto Linux Voice Assistant/ESPHome.
 - **Voice announcement ducking** — if signalk-wyoming's stretch goal
   ("Snapcast as an announce target") is picked up, the natural seam is
   signalk-wyoming's orchestrator becoming a second Snapserver _source_
