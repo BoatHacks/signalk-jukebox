@@ -39,10 +39,10 @@ export interface RegisterRoutesArgs {
   app: SatellitesAppLike;
 }
 
-// "Output" (not the raw "Jukebox" stream) is what a zone gets assigned to
-// for "play the jukebox" -- Snapcast's own auto-ducking meta stream
-// (snapserver.conf.template, zone-sync.ts's own comment on this).
-const JUKEBOX_STREAM_ID = "Output";
+// "MusicAndAlerts" (not the raw "MopidyOnly" stream) is what a zone gets
+// assigned to for "play the jukebox" -- Snapcast's own auto-ducking meta
+// stream (snapserver.conf.template, zone-sync.ts's own comment on this).
+const JUKEBOX_STREAM_ID = "MusicAndAlerts";
 const ALERTS_STREAM_ID = "Alerts";
 const SILENCE_STREAM_ID = "Silence";
 

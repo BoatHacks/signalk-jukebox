@@ -71,7 +71,7 @@ describe("POST /api/zones/:id/source", () => {
       res,
     );
 
-    expect(setGroupStream).toHaveBeenCalledWith("group-1", "Output");
+    expect(setGroupStream).toHaveBeenCalledWith("group-1", "MusicAndAlerts");
     expect(res.body).toEqual({ ok: true });
     expect(store.getZone("zone-1")?.activeSource).toBe("jukebox");
   });

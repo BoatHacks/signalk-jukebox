@@ -4,7 +4,7 @@
 # No per-zone AirPlay streams are declared here (SPEC.md §6.4, §13):
 # those are created/removed at runtime via Stream.AddStream/RemoveStream
 # by the plugin (src/airplay/receiver.ts), not pre-declared in static
-# config. This file only needs the Jukebox (Mopidy) source and the
+# config. This file only needs the MopidyOnly (Mopidy) source and the
 # sandbox_dir that makes runtime airplay:// stream creation possible.
 
 [stream]
@@ -12,7 +12,7 @@
 # section) -- entrypoint.sh creates this FIFO before starting either
 # process. TODO(verify): confirm sampleformat matches what Mopidy's
 # GStreamer pipeline actually emits.
-source = pipe:///tmp/snapfifo?name=Jukebox&sampleformat=48000:16:2
+source = pipe:///tmp/snapfifo?name=MopidyOnly&sampleformat=48000:16:2
 
 # Announcement intake for other containers/processes (SPEC.md §6, §12) --
 # a second, independent stream a zone can be manually switched to (src/
@@ -39,22 +39,24 @@ source = pipe:///tmp/silencefifo?name=Silence&sampleformat=48000:16:2
 
 # Auto-ducking combined output (SPEC.md §6, §12) -- what a zone actually
 # means by "play the jukebox" (src/zone-sync.ts, src/routes.ts's own
-# JUKEBOX_STREAM_ID, both now "Output", not "Jukebox" directly). Snapcast's
-# `meta` source type plays whichever listed source is currently active,
-# highest-priority first -- confirmed by build-testing: with Alerts listed
-# first, this stream automatically switches to it the moment audio starts
-# arriving there, then automatically falls back to Jukebox the moment
-# Alerts goes idle again, with no zone-reassignment or muting needed from
-# any plugin. Jukebox and Alerts keep their own real codec (not `codec=null`
-# as Snapcast's docs suggest for meta-only inputs) because they're still
-# directly connectable in their own right (a zone manually switched to
-# "Alerts" via the webapp targets the raw stream, not this one).
-source = meta:///Alerts/Jukebox?name=Output
+# JUKEBOX_STREAM_ID, now "MusicAndAlerts", not the raw "MopidyOnly" stream
+# directly). Snapcast's `meta` source type plays whichever listed source is
+# currently active, highest-priority first -- confirmed by build-testing:
+# with Alerts listed first, this stream automatically switches to it the
+# moment audio starts arriving there, then automatically falls back to
+# MopidyOnly the moment Alerts goes idle again, with no zone-reassignment
+# or muting needed from any plugin. MopidyOnly and Alerts keep their own
+# real codec (not `codec=null` as Snapcast's docs suggest for meta-only
+# inputs) because they're still directly connectable in their own right (a
+# zone manually switched to "Alerts" via the webapp targets the raw
+# stream, not this one).
+source = meta:///Alerts/MopidyOnly?name=MusicAndAlerts
 
-# New (never-before-seen) Snapclients default here, not the raw Jukebox
+# New (never-before-seen) Snapclients default here, not the raw MopidyOnly
 # stream, so they get the auto-ducking behavior from their very first
-# connection -- otherwise defaults to the first non-meta source (Jukebox).
-default_source = Output
+# connection -- otherwise defaults to the first non-meta source
+# (MopidyOnly).
+default_source = MusicAndAlerts
 
 # Runtime-created airplay streams (Stream.AddStream) must reference an
 # executable inside this directory -- confirmed via research (SPEC.md

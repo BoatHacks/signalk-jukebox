@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { migrateZonesToOutputStream } from "../src/zone-sync.js";
+import { migrateZonesToCurrentJukeboxStream } from "../src/zone-sync.js";
 import type { SnapserverClient, SnapGroup } from "../src/snapserver-client.js";
 
 function fakeSnapserver(groups: SnapGroup[]) {
@@ -9,27 +9,30 @@ function fakeSnapserver(groups: SnapGroup[]) {
   } as unknown as SnapserverClient;
 }
 
-describe("migrateZonesToOutputStream", () => {
-  it("moves a group still on the raw Jukebox stream onto Output", async () => {
+describe("migrateZonesToCurrentJukeboxStream", () => {
+  it("moves a group still on either legacy jukebox stream name onto MusicAndAlerts", async () => {
     const snapserver = fakeSnapserver([
       { id: "group-1", streamId: "Jukebox", clients: [] },
+      { id: "group-2", streamId: "Output", clients: [] },
     ]);
     const onError = vi.fn();
 
-    await migrateZonesToOutputStream(snapserver, onError);
+    await migrateZonesToCurrentJukeboxStream(snapserver, onError);
 
-    expect(snapserver.setGroupStream).toHaveBeenCalledWith("group-1", "Output");
+    expect(snapserver.setGroupStream).toHaveBeenCalledWith("group-1", "MusicAndAlerts");
+    expect(snapserver.setGroupStream).toHaveBeenCalledWith("group-2", "MusicAndAlerts");
     expect(onError).not.toHaveBeenCalled();
   });
 
-  it("leaves a group already on Output, Alerts, or its own AirPlay stream alone", async () => {
+  it("leaves a group already on MusicAndAlerts, Alerts, Silence, or its own AirPlay stream alone", async () => {
     const snapserver = fakeSnapserver([
-      { id: "group-1", streamId: "Output", clients: [] },
+      { id: "group-1", streamId: "MusicAndAlerts", clients: [] },
       { id: "group-2", streamId: "Alerts", clients: [] },
-      { id: "group-3", streamId: "AirPlay - Salon", clients: [] },
+      { id: "group-3", streamId: "Silence", clients: [] },
+      { id: "group-4", streamId: "AirPlay - Salon", clients: [] },
     ]);
 
-    await migrateZonesToOutputStream(snapserver, vi.fn());
+    await migrateZonesToCurrentJukeboxStream(snapserver, vi.fn());
 
     expect(snapserver.setGroupStream).not.toHaveBeenCalled();
   });
@@ -41,7 +44,7 @@ describe("migrateZonesToOutputStream", () => {
     } as unknown as SnapserverClient;
     const onError = vi.fn();
 
-    await migrateZonesToOutputStream(snapserver, onError);
+    await migrateZonesToCurrentJukeboxStream(snapserver, onError);
 
     expect(onError).toHaveBeenCalledWith(expect.stringContaining("connection refused"));
   });

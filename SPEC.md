@@ -884,40 +884,45 @@ all-zone fallback, volume duck, §2):**
   (container.ts's `ports`) -- deliberately not routed through this
   plugin's REST API, so any producer just needs a TCP connection, no
   SignalK-specific integration.
-- **Auto-ducking `"Output"` meta stream, not per-zone muting/reassignment,
-  for a zone to hear an announcement without losing its music** —
-  Snapcast's own `meta` source type (`meta:///Alerts/Jukebox?name=Output`,
-  snapserver.conf.template) plays whichever listed source is currently
-  active, highest-priority first; confirmed by build-testing that with
-  Alerts listed first, this stream automatically switches to it the moment
-  audio arrives there and automatically falls back to Jukebox the moment
-  Alerts goes idle, with no muting or Group.SetStream calls needed from any
-  plugin. This is now what "play the jukebox" actually means for a zone --
-  `JUKEBOX_STREAM_ID` (zone-sync.ts, routes.ts) is `"Output"`, not the raw
-  `"Jukebox"` stream, which is now only ever a meta-stream input, never a
-  zone's own direct assignment. A zone manually switched to `"Alerts"`
-  (above) is unaffected by this -- that's still an exclusive, no-jukebox
-  state, a different concept from Output's auto-duck-and-resume. Existing
-  zones from before this stream existed are migrated once at startup
-  (`migrateZonesToOutputStream()`, zone-sync.ts): any group still on the
-  raw `"Jukebox"` stream (a Snapcast-persisted assignment that survives
-  container recreates) is moved onto `"Output"`, so upgrading doesn't
-  require re-clicking "Play here" on every zone.
+- **Auto-ducking `"MusicAndAlerts"` meta stream, not per-zone
+  muting/reassignment, for a zone to hear an announcement without losing
+  its music** — Snapcast's own `meta` source type
+  (`meta:///Alerts/MopidyOnly?name=MusicAndAlerts`, snapserver.conf.template)
+  plays whichever listed source is currently active, highest-priority
+  first; confirmed by build-testing that with Alerts listed first, this
+  stream automatically switches to it the moment audio arrives there and
+  automatically falls back to MopidyOnly the moment Alerts goes idle, with
+  no muting or Group.SetStream calls needed from any plugin. This is now
+  what "play the jukebox" actually means for a zone --
+  `JUKEBOX_STREAM_ID` (zone-sync.ts, routes.ts) is `"MusicAndAlerts"`, not
+  the raw `"MopidyOnly"` stream (Mopidy's own audio, renamed from
+  `"Jukebox"` in the same change), which is now only ever a meta-stream
+  input, never a zone's own direct assignment. A zone manually switched to
+  `"Alerts"` (above) is unaffected by this -- that's still an exclusive,
+  no-jukebox state, a different concept from MusicAndAlerts's
+  auto-duck-and-resume. Existing zones from before this stream existed (or
+  from its own earlier name, `"Output"`) are migrated once at startup
+  (`migrateZonesToCurrentJukeboxStream()`, zone-sync.ts,
+  `LEGACY_JUKEBOX_STREAM_IDS`): any group still on `"Jukebox"` or
+  `"Output"` (a Snapcast-persisted assignment that survives container
+  recreates) is moved onto `"MusicAndAlerts"`, so upgrading doesn't
+  require re-clicking a webapp button on every zone.
 - **A fourth stream, `"Silence"`, for a zone that should hear nothing at
   all, not even announcements** (e.g. a sleeping cabin) — deliberately not
   achieved via client-level muting, which is a separate, already-existing
   control (the webapp's own Mute button); this is a genuine audio source a
-  zone is switched onto, same as Jukebox/Alerts. All-zero bytes are digital
-  silence in S16LE PCM, so `entrypoint.sh` feeds `snapserver.conf.template`'s
-  `pipe:///tmp/silencefifo?name=Silence` continuously from `/dev/zero`,
-  started before Snapserver so its `pipe://` reader doesn't block waiting
-  for a writer -- confirmed by build-testing to register and stay stable
-  with no synth/audio tooling needed at all. Paced by the FIFO's own kernel
-  buffer (`cat` blocks once it fills, resuming only as Snapserver actually
-  reads), so the writer needs no knowledge of the sample rate. `"silence"`
-  is a third value `routes.ts`'s `/source` endpoint accepts, alongside
-  `"jukebox"`/`"alerts"`; the webapp's per-zone control is three exclusive
-  buttons (Output/Alerts/Silence), not a two-way toggle, mirroring the
+  zone is switched onto, same as MopidyOnly/Alerts. All-zero bytes are
+  digital silence in S16LE PCM, so `entrypoint.sh` feeds
+  `snapserver.conf.template`'s `pipe:///tmp/silencefifo?name=Silence`
+  continuously from `/dev/zero`, started before Snapserver so its
+  `pipe://` reader doesn't block waiting for a writer -- confirmed by
+  build-testing to register and stay stable with no synth/audio tooling
+  needed at all. Paced by the FIFO's own kernel buffer (`cat` blocks once
+  it fills, resuming only as Snapserver actually reads), so the writer
+  needs no knowledge of the sample rate. `"silence"` is a third value
+  `routes.ts`'s `/source` endpoint accepts, alongside `"jukebox"`/
+  `"alerts"`; the webapp's per-zone control is three exclusive buttons
+  (MusicAndAlerts/Alerts/Silence), not a two-way toggle, mirroring the
   three real states a zone can be manually put in.
 - **Combined Mopidy+Snapserver image over two containers** — one
   `ManagedContainer` instance, one lifecycle, no inter-container network

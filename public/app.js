@@ -172,7 +172,7 @@ function buildZoneRow(zone) {
     </div>
     <div class="zone-controls">
       <div class="source-buttons">
-        <button class="source-btn jukebox" data-source="jukebox">Output</button>
+        <button class="source-btn jukebox" data-source="jukebox">MusicAndAlerts</button>
         <button class="source-btn alerts" data-source="alerts">Alerts</button>
         <button class="source-btn silence" data-source="silence">Silence</button>
       </div>
@@ -190,13 +190,14 @@ function buildZoneRow(zone) {
   const muteBtn = row.querySelector(".mute-btn");
 
   // Three exclusive states, not a toggle: "jukebox" is the auto-ducking
-  // combined stream (routes.ts's JUKEBOX_STREAM_ID, "Output" underneath --
-  // hears the shared music, automatically interrupted for an announcement,
-  // then automatically resumed); "alerts" hears ONLY announcements, no
-  // jukebox at all, without muting the whole Snapclient; "silence" hears
-  // nothing at all, not even announcements, e.g. a sleeping cabin. AirPlay
-  // is the only source this can't set manually: it's switched to
-  // automatically on connect (routes.ts), never chosen here.
+  // combined stream (routes.ts's JUKEBOX_STREAM_ID, "MusicAndAlerts"
+  // underneath -- hears the shared music, automatically interrupted for an
+  // announcement, then automatically resumed); "alerts" hears ONLY
+  // announcements, no jukebox at all, without muting the whole Snapclient;
+  // "silence" hears nothing at all, not even announcements, e.g. a
+  // sleeping cabin. AirPlay is the only source this can't set manually:
+  // it's switched to automatically on connect (routes.ts), never chosen
+  // here.
   for (const btn of sourceButtons) {
     btn.addEventListener("click", async () => {
       await zonePost(zone.id, "source", { source: btn.dataset.source });
@@ -245,7 +246,7 @@ function updateZoneRow(entry, zone) {
   entry.nameText.textContent = zone.name || zone.id;
   entry.sourceBadge.textContent =
     zone.activeSource === "jukebox"
-      ? "Output"
+      ? "MusicAndAlerts"
       : zone.activeSource === "alerts"
         ? "Alerts"
         : zone.activeSource === "silence"

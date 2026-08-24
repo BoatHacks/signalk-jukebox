@@ -12,14 +12,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   continuously from `/dev/zero`) — for a zone that shouldn't hear anything
   at all, not even announcements, e.g. a sleeping cabin. `POST
   /api/zones/:id/source` now also accepts `"silence"`; the webapp's
-  per-zone control is now three exclusive buttons (Output/Alerts/Silence)
-  instead of a two-way toggle.
-- A third Snapcast stream, "Output" (`meta:///Alerts/Jukebox`) — auto-ducks
-  the jukebox for an announcement and auto-resumes it afterward, with no
-  muting or zone reassignment needed from any plugin. This is now what
-  "play the jukebox" actually means for a zone (`JUKEBOX_STREAM_ID` is
-  `"Output"`, not the raw "Jukebox" stream); zones from before this stream
-  existed are migrated onto it once at startup, no manual re-click needed.
+  per-zone control is now three exclusive buttons
+  (MusicAndAlerts/Alerts/Silence) instead of a two-way toggle.
+- A third Snapcast stream, "MusicAndAlerts" (`meta:///Alerts/MopidyOnly`,
+  Mopidy's own raw audio renamed from "Jukebox" to "MopidyOnly" in the
+  same change) — auto-ducks the jukebox for an announcement and
+  auto-resumes it afterward, with no muting or zone reassignment needed
+  from any plugin. This is now what "play the jukebox" actually means for
+  a zone (`JUKEBOX_STREAM_ID` is `"MusicAndAlerts"`, not the raw
+  "MopidyOnly" stream); zones from before this stream existed are
+  migrated onto it once at startup, no manual re-click needed.
 - A second Snapcast stream, "Alerts" — a standing announcement intake
   (Snapcast's `tcp server` source type, port 4953) any other container or
   process can connect to and stream a WAV-framed announcement into. The
