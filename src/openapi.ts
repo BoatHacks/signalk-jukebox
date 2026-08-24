@@ -11,7 +11,7 @@ export const openApiDocument = {
   openapi: "3.0.3",
   info: {
     title: "signalk-jukebox API",
-    version: "0.0.14",
+    version: "0.1.0",
     description:
       "REST API for signalk-jukebox: whole-boat music playback status, per-zone Snapcast volume/mute/source control, and container image updates. Actual playback control (play/pause/skip/queue/search) goes through the reverse-proxied Mopidy JSON-RPC endpoint (POST /mopidy/rpc) or the Mopidy-MusicBox-Webclient web UI, reached directly at http://<this-host>:6680/musicbox_webclient/ (not reverse-proxied -- see proxy.ts), not this REST surface -- see SPEC.md §6.1.",
     license: {
