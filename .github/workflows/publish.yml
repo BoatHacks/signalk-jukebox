@@ -3,6 +3,7 @@ on: { release: { types: [published] } }
 permissions:
   contents: read
   id-token: write # enables npm OIDC trusted publishing
+  packages: write # enables pushing container images to ghcr.io
 jobs:
   publish:
     runs-on: ubuntu-latest
@@ -13,3 +14,42 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm publish
+
+  # Keeps ghcr.io/boathacks/signalk-jukebox and
+  # ghcr.io/boathacks/signalk-jukebox-snapclient tracking the npm package's
+  # own version in tandem: every release rebuilds and pushes both images,
+  # tagged with :latest (the tag "auto" in the plugin's own settings
+  # resolves to, container.ts/local-snapclient.ts's resolveTag) AND the
+  # release's own version number, so a build is never left stale behind a
+  # release and there's always a version-pinned image to roll back to.
+  build-images:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - image: signalk-jukebox
+            context: image
+          - image: signalk-jukebox-snapclient
+            context: image-snapclient
+    steps:
+      - uses: actions/checkout@v4
+      - name: Derive the image version from the release tag (strip the leading "v")
+        id: version
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/boathacks/${{ matrix.image }}:latest
+            ghcr.io/boathacks/${{ matrix.image }}:${{ steps.version.outputs.version }}

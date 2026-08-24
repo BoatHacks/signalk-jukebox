@@ -685,9 +685,16 @@ signalk-jukebox/
 - Installed as a SignalK plugin (App Store or `npm install`), requiring
   **signalk-container** with a working docker/podman runtime — same
   prerequisite chain as any `ManagedContainer`-based plugin.
-- The `signalk-jukebox` container image is published separately (e.g.
-  `ghcr.io/<org>/signalk-jukebox`) and pulled by signalk-container the
-  same way any managed image is.
+- The `signalk-jukebox` container image (and `signalk-jukebox-snapclient`,
+  the standalone local-Snapclient image) is published separately at
+  `ghcr.io/boathacks/<name>`, and pulled by signalk-container the same way
+  any managed image is. `.github/workflows/publish.yml`'s `build-images`
+  job rebuilds and pushes both, tagged `:latest` and the exact npm package
+  version (e.g. `:0.1.0`), on every GitHub release — so an image is never
+  left stale behind a release. `container.ts`/`local-snapclient.ts`'s
+  `resolveTag` always maps the plugin's own `"auto"` image-tag setting to
+  `:latest`; the version tags exist for pulling a specific historical
+  build deliberately, not for anything the plugin resolves to itself.
 - Runtime data (Mopidy config/cache, Spotify auth cache, queue snapshot)
   lives in the plugin's `signalkDataMount` volume — survives container
   recreation, per `ManagedContainer` conventions.

@@ -14,8 +14,12 @@ import type { PluginSettings } from "./types.js";
 // streams at runtime (SPEC.md §6.4, §13) -- no static AirPlay stream pool to
 // configure here.
 //
-// Published (ARCHITECTURE.md §8): ghcr.io/boathacks/signalk-jukebox:latest
-// and :0.0.1, public visibility.
+// Published (ARCHITECTURE.md §8): ghcr.io/boathacks/signalk-jukebox:latest,
+// public visibility. Also tagged with the exact npm package version on
+// every release (e.g. :0.1.0, .github/workflows/publish.yml's
+// build-images job) -- "auto" (SCHEMA_DEFAULTS.imageTag) always resolves
+// to :latest (resolveTag below), the version tag exists purely so a
+// specific historical build can still be pulled deliberately.
 export const JUKEBOX_IMAGE = "ghcr.io/boathacks/signalk-jukebox";
 
 export const MOPIDY_PORT = 6680;

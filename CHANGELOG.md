@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- `.github/workflows/publish.yml`'s `build-images` job: rebuilds and
+  pushes both `ghcr.io/boathacks/signalk-jukebox` and
+  `ghcr.io/boathacks/signalk-jukebox-snapclient` (multi-arch,
+  linux/amd64+linux/arm64), tagged `:latest` and the exact npm package
+  version, on every GitHub release — so a container image is never left
+  stale behind a release.
+
 ## [0.1.0] - 2026-08-24
 
 ### Changed
