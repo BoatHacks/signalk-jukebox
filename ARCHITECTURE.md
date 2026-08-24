@@ -158,9 +158,11 @@ other directly) when a command arrives on its interface.
   the raw stream is a meta-stream input only, never a zone's own direct
   assignment. `migrateZonesToCurrentJukeboxStream()` (`zone-sync.ts`,
   `LEGACY_JUKEBOX_STREAM_IDS`) runs once at plugin start: any zone still
-  on `"Jukebox"` or this stream's own earlier name `"Output"` (a
-  Snapcast-persisted assignment surviving container recreates) is moved
+  on `"Jukebox"` or this stream's own earlier name `"Output"` is moved
   onto `"MusicAndAlerts"`, so upgrading needs no manual per-zone re-click.
+  Those legacy names could only ever be found because Snapcast's own
+  assignment state wasn't actually persisted at the time -- `dataMount`
+  below fixes that going forward.
 - A fourth stream, `"Silence"` (`pipe:///tmp/silencefifo?name=Silence`,
   snapserver.conf.template), for a zone that should hear nothing at all,
   not even announcements. `entrypoint.sh` starts `cat /dev/zero >
@@ -171,6 +173,17 @@ other directly) when a command arrives on its interface.
   `/source` endpoint accepts `"silence"` as a third value alongside
   `"jukebox"`/`"alerts"`; the webapp's per-zone control is three exclusive
   buttons, not a two-way toggle.
+- `dataMount` (`container.ts`'s `CreateManagedContainerArgs`) mounts this
+  plugin's own persistent data dir at `/data`, resolved the same way
+  `libraryMount` already was (`resolveMount()` against
+  `app.getDataDirPath()`, not `ContainerConfig.signalkDataMount` — that
+  resolves to *signalk-container's* own data dir, per its own doc
+  comment) but unconditionally, not gated on the local-library backend.
+  Mopidy's own `data_dir`/`cache_dir` (mopidy.conf.template) and
+  Snapserver's `[server] datadir` (snapserver.conf.template, pointed at
+  `/data/snapserver`) both live under it now — confirmed the hard way
+  that neither survived a real container recreate before this, only a
+  plain restart of the same container.
 - **Resolves its own address differently under `airplay.hostNetworking`
   (SPEC.md §12).** The normal path (`signalkAccessiblePorts` +
   `readiness`) can't be used there at all: confirmed against a real

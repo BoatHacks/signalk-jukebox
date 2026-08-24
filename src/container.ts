@@ -54,6 +54,16 @@ export interface CreateManagedContainerArgs {
    * before calling in, per signalk-container-helper's README guidance on
    * resolving mounts inside startSafely, before buildConfig runs. */
   libraryMount?: { source: string; containerPath: string };
+  /** Resolved host mount for this plugin's own persistent data dir
+   * (app.getDataDirPath(), via resolveMount() same as libraryMount) --
+   * mounted at /data, where Mopidy's own data_dir and Snapserver's datadir
+   * (mopidy.conf.template, snapserver.conf.template) both already live.
+   * Without this, server.json (Snapcast's client/group registration,
+   * volume, mute, and each zone's current stream assignment) sat in the
+   * container's own ephemeral layer, confirmed lost on every real
+   * container recreate (not just a plain restart of the same container),
+   * as was Mopidy's own Spotify auth cache and library scan cache. */
+  dataMount?: { source: string; containerPath: string };
 }
 
 /** Full ContainerConfig for a tag (pure -- unit-tested directly, same
@@ -62,6 +72,7 @@ export function buildJukeboxConfig(
   tag: string,
   settings: PluginSettings,
   libraryMount?: { source: string; containerPath: string },
+  dataMount?: { source: string; containerPath: string },
 ): ContainerConfig {
   const hostNetworking = settings.airplay.hostNetworking;
   return {
@@ -159,7 +170,13 @@ export function buildJukeboxConfig(
       JUKEBOX_SPOTIFY_CLIENT_SECRET:
         settings.backends.spotify.clientSecret ?? "",
     },
-    volumes: libraryMount ? { "/music": libraryMount.source } : undefined,
+    volumes:
+      libraryMount || dataMount
+        ? {
+            ...(libraryMount ? { "/music": libraryMount.source } : {}),
+            ...(dataMount ? { "/data": dataMount.source } : {}),
+          }
+        : undefined,
     restart: "unless-stopped",
     resources: {
       cpus: 1,
@@ -174,6 +191,7 @@ export function createManagedContainer({
   app,
   settings,
   libraryMount,
+  dataMount,
 }: CreateManagedContainerArgs): ManagedContainer {
   const hostNetworking = settings.airplay.hostNetworking;
   return new ManagedContainer({
@@ -202,7 +220,8 @@ export function createManagedContainer({
     // comfortable headroom under that 2-minute ceiling for the genuinely-
     // absent case (CI, or a misconfigured install).
     managerTimeoutMs: 20_000,
-    buildConfig: (tag) => buildJukeboxConfig(tag, settings, libraryMount),
+    buildConfig: (tag) =>
+      buildJukeboxConfig(tag, settings, libraryMount, dataMount),
     // Confirmed by build-testing (devpod): /mopidy/rpc is POST-only
     // JSON-RPC and returns 405 to a plain GET, which is what
     // signalk-container-helper's readiness prober sends -- using it here

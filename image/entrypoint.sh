@@ -12,7 +12,13 @@
 
 set -e
 
-mkdir -p /data /cache /app/sandbox /var/run/dbus
+# /data is mounted persistently by container.ts (dataMount, resolveMount
+# against this plugin's own app.getDataDirPath()) -- Mopidy's own data_dir
+# (mopidy.conf.template) and Snapserver's datadir (snapserver.conf.template,
+# server.json: client/group registration, volume, mute, and each zone's
+# current stream assignment) both live under it, so both now survive a
+# real container recreate, not just a plain restart of the same container.
+mkdir -p /data /data/snapserver /cache /app/sandbox /var/run/dbus
 
 # shairport-sync hard-requires a working Avahi client to advertise itself
 # over mDNS -- confirmed by build-testing (SPEC.md §13): without this, it

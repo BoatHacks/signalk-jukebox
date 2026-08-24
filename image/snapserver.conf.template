@@ -7,6 +7,18 @@
 # config. This file only needs the MopidyOnly (Mopidy) source and the
 # sandbox_dir that makes runtime airplay:// stream creation possible.
 
+[server]
+# Where server.json lives (client/group registration, volume, mute, and
+# each zone's current stream assignment -- SPEC.md §6, §12). Left at its
+# implicit default ($HOME/.config/snapserver, since this process isn't run
+# with --daemon) this sat in the container's own ephemeral layer, lost on
+# every real recreate (confirmed the hard way: a zone came back as a
+# brand-new client, not its prior assignment, after a `podman rm -f` +
+# recreate during this project's own development). Pointed at /data
+# instead, which container.ts mounts persistently (dataMount) the same way
+# Mopidy's own data_dir below already is.
+datadir = /data/snapserver
+
 [stream]
 # Mopidy's audio output is piped here (see mopidy.conf.template's [audio]
 # section) -- entrypoint.sh creates this FIFO before starting either

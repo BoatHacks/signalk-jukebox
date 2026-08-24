@@ -904,9 +904,14 @@ all-zone fallback, volume duck, §2):**
   from its own earlier name, `"Output"`) are migrated once at startup
   (`migrateZonesToCurrentJukeboxStream()`, zone-sync.ts,
   `LEGACY_JUKEBOX_STREAM_IDS`): any group still on `"Jukebox"` or
-  `"Output"` (a Snapcast-persisted assignment that survives container
-  recreates) is moved onto `"MusicAndAlerts"`, so upgrading doesn't
-  require re-clicking a webapp button on every zone.
+  `"Output"` is moved onto `"MusicAndAlerts"`, so upgrading doesn't
+  require re-clicking a webapp button on every zone. Those two legacy
+  names could only ever be found because `server.json` (Snapcast's own
+  client/group/stream-assignment state) wasn't actually persisted at the
+  time -- see the dataMount item below; confirmed the hard way, a group's
+  assignment did NOT survive a real container recreate before that fix,
+  contrary to what an earlier version of this same paragraph assumed
+  without verifying.
 - **A fourth stream, `"Silence"`, for a zone that should hear nothing at
   all, not even announcements** (e.g. a sleeping cabin) — deliberately not
   achieved via client-level muting, which is a separate, already-existing
@@ -924,6 +929,25 @@ all-zone fallback, volume duck, §2):**
   `"alerts"`; the webapp's per-zone control is three exclusive buttons
   (MusicAndAlerts/Alerts/Silence), not a two-way toggle, mirroring the
   three real states a zone can be manually put in.
+- **`dataMount`, mounting this plugin's own persistent data dir at
+  `/data`, so a zone's source assignment (and Mopidy's Spotify auth
+  cache/library scan cache) survives a real container recreate, not just
+  a plain restart of the same container** — confirmed the hard way:
+  before this, Snapcast's `server.json` (client/group registration,
+  volume, mute, and each zone's current stream assignment) lived at its
+  implicit default, `$HOME/.config/snapserver` inside the container's own
+  ephemeral layer (this process isn't run with `--daemon`), and a real
+  recreate brought a zone back as a brand-new client every time, not its
+  prior assignment. `snapserver.conf.template`'s `[server] datadir`
+  points it at `/data/snapserver` instead, alongside Mopidy's own
+  `data_dir`/`cache_dir` (mopidy.conf.template), which were equally
+  unmounted and equally ephemeral before this. Resolved the same way
+  `libraryMount` already was: `resolveMount()` against this plugin's own
+  `app.getDataDirPath()` (not `ContainerConfig.signalkDataMount`, which
+  resolves to *signalk-container's* own data dir, not this plugin's —
+  `resolveMount`'s own doc comment on this), unconditionally rather than
+  gated on the local-library backend being enabled, since Snapcast's own
+  state has nothing to do with that setting.
 - **Combined Mopidy+Snapserver image over two containers** — one
   `ManagedContainer` instance, one lifecycle, no inter-container network
   wiring to get wrong; matches the precedent set by signalk-wyoming's

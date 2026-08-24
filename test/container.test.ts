@@ -49,4 +49,35 @@ describe("buildJukeboxConfig", () => {
     expect(config.signalkAccessiblePorts).toBeUndefined();
     expect(config.ports).toBeUndefined();
   });
+
+  it("mounts /data when dataMount is given, alongside /music when libraryMount is also given", () => {
+    const config = buildJukeboxConfig(
+      "latest",
+      settingsWith({ hostNetworking: false }),
+      { source: "/host/music", containerPath: "/music" },
+      { source: "/host/plugin-data", containerPath: "/data" },
+    );
+    expect(config.volumes).toEqual({
+      "/music": "/host/music",
+      "/data": "/host/plugin-data",
+    });
+  });
+
+  it("mounts only /data when libraryMount is absent", () => {
+    const config = buildJukeboxConfig(
+      "latest",
+      settingsWith({ hostNetworking: false }),
+      undefined,
+      { source: "/host/plugin-data", containerPath: "/data" },
+    );
+    expect(config.volumes).toEqual({ "/data": "/host/plugin-data" });
+  });
+
+  it("omits volumes entirely when neither mount is given", () => {
+    const config = buildJukeboxConfig(
+      "latest",
+      settingsWith({ hostNetworking: false }),
+    );
+    expect(config.volumes).toBeUndefined();
+  });
 });

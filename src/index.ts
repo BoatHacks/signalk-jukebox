@@ -108,27 +108,47 @@ export default function plugin(app: App) {
       registerControlsMeta(app, jukebox.id);
 
       startSafely(app, async () => {
+        // resolveMount inside startSafely, before buildConfig runs --
+        // buildConfig is synchronous and can't await it itself (README
+        // "Mounting your plugin's own data directory").
+        const { waitForContainerManager } =
+          await import("signalk-container-helper");
+        const { manager } = await waitForContainerManager();
+
         let libraryMount: { source: string; containerPath: string } | undefined;
-        if (settings.backends.local.enabled && settings.libraryPath) {
-          // resolveMount inside startSafely, before buildConfig runs --
-          // buildConfig is synchronous and can't await it itself (README
-          // "Mounting your plugin's own data directory").
-          const { waitForContainerManager } =
-            await import("signalk-container-helper");
-          const { manager } = await waitForContainerManager();
-          if (manager) {
-            const resolved = await resolveMount(manager, {
-              containerPath: "/music",
-              hostPath: settings.libraryPath,
-            });
-            libraryMount = {
-              source: resolved.source,
-              containerPath: resolved.containerPath,
-            };
-          }
+        if (manager && settings.backends.local.enabled && settings.libraryPath) {
+          const resolved = await resolveMount(manager, {
+            containerPath: "/music",
+            hostPath: settings.libraryPath,
+          });
+          libraryMount = {
+            source: resolved.source,
+            containerPath: resolved.containerPath,
+          };
         }
 
-        container = createManagedContainer({ app, settings, libraryMount });
+        // Unconditional (unlike libraryMount above): this is where
+        // Mopidy's own data + Snapserver's server.json persist across a
+        // real container recreate, not just the music library -- see
+        // container.ts's own CreateManagedContainerArgs.dataMount comment.
+        let dataMount: { source: string; containerPath: string } | undefined;
+        if (manager) {
+          const resolved = await resolveMount(manager, {
+            containerPath: "/data",
+            hostPath: app.getDataDirPath(),
+          });
+          dataMount = {
+            source: resolved.source,
+            containerPath: resolved.containerPath,
+          };
+        }
+
+        container = createManagedContainer({
+          app,
+          settings,
+          libraryMount,
+          dataMount,
+        });
         const { address: resolvedAddress } = await container.start(
           settings.imageTag,
         );

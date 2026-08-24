@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- `dataMount`, mounting this plugin's own persistent data dir at `/data` —
+  confirmed the hard way that a zone's Snapcast source assignment (and
+  Mopidy's own Spotify auth cache/library scan cache) did NOT survive a
+  real container recreate before this, only a plain restart of the same
+  container, since neither Snapcast's `server.json` nor Mopidy's own
+  `data_dir`/`cache_dir` were mounted anywhere. Resolved the same way the
+  local-library mount already was, but unconditionally.
 - A fourth Snapcast stream, "Silence" (`pipe:///tmp/silencefifo`, fed
   continuously from `/dev/zero`) — for a zone that shouldn't hear anything
   at all, not even announcements, e.g. a sleeping cabin. `POST
