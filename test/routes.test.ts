@@ -3,18 +3,33 @@ import { registerRoutes } from "../src/routes.js";
 import { StateStore } from "../src/state/store.js";
 import type { SnapserverClient } from "../src/snapserver-client.js";
 import type { CanonicalState, Zone } from "../src/types.js";
+import type { RouterLike, ResponseLike } from "signalk-container-helper";
+
+type PostHandler = (req: unknown, res: ResponseLike) => unknown;
 
 function fakeRouter() {
-  const posts: Record<string, (req: unknown, res: unknown) => unknown> = {};
-  return {
-    router: {
-      get: () => undefined,
-      post: (path: string, handler: (req: unknown, res: unknown) => unknown) => {
-        posts[path] = handler;
-      },
+  const posts: Record<string, PostHandler> = {};
+  const router: RouterLike = {
+    get: () => undefined,
+    post: (path, handler) => {
+      posts[path] = handler;
     },
-    posts,
   };
+  return { router, posts };
+}
+
+// noUncheckedIndexedAccess makes posts[path] a `PostHandler | undefined` --
+// this asserts the test itself registered the route it's about to invoke,
+// rather than every call site repeating the same non-null assertion.
+function callPost(
+  posts: Record<string, PostHandler>,
+  path: string,
+  req: unknown,
+  res: ResponseLike,
+) {
+  const handler = posts[path];
+  if (!handler) throw new Error(`no handler registered for ${path}`);
+  return handler(req, res);
 }
 
 function fakeRes() {
@@ -66,7 +81,7 @@ describe("POST /api/zones/:id/source", () => {
     });
 
     const res = fakeRes();
-    await posts["/api/zones/:id/source"](
+    await callPost(posts, "/api/zones/:id/source", 
       { params: { id: "zone-1" }, body: { source: "jukebox" } },
       res,
     );
@@ -88,7 +103,7 @@ describe("POST /api/zones/:id/source", () => {
     });
 
     const res = fakeRes();
-    await posts["/api/zones/:id/source"](
+    await callPost(posts, "/api/zones/:id/source", 
       { params: { id: "zone-1" }, body: { source: "alerts" } },
       res,
     );
@@ -110,7 +125,7 @@ describe("POST /api/zones/:id/source", () => {
     });
 
     const res = fakeRes();
-    await posts["/api/zones/:id/source"](
+    await callPost(posts, "/api/zones/:id/source", 
       { params: { id: "zone-1" }, body: { source: "silence" } },
       res,
     );
@@ -132,7 +147,7 @@ describe("POST /api/zones/:id/source", () => {
     });
 
     const res = fakeRes();
-    posts["/api/zones/:id/source"](
+    callPost(posts, "/api/zones/:id/source", 
       { params: { id: "zone-1" }, body: { source: "airplay" } },
       res,
     );
@@ -152,7 +167,7 @@ describe("POST /api/zones/:id/source", () => {
     });
 
     const res = fakeRes();
-    posts["/api/zones/:id/source"](
+    callPost(posts, "/api/zones/:id/source", 
       { params: { id: "does-not-exist" }, body: { source: "jukebox" } },
       res,
     );
@@ -171,7 +186,7 @@ describe("POST /api/zones/:id/source", () => {
     });
 
     const res = fakeRes();
-    posts["/api/zones/:id/source"](
+    callPost(posts, "/api/zones/:id/source", 
       { params: { id: "zone-1" }, body: { source: "jukebox" } },
       res,
     );
@@ -193,7 +208,7 @@ describe("POST /api/zones/:id/delete", () => {
     });
 
     const res = fakeRes();
-    await posts["/api/zones/:id/delete"]({ params: { id: "zone-1" } }, res);
+    await callPost(posts, "/api/zones/:id/delete", { params: { id: "zone-1" } }, res);
 
     expect(deleteClient).toHaveBeenCalledWith("zone-1");
     expect(res.body).toEqual({ ok: true });
@@ -212,7 +227,7 @@ describe("POST /api/zones/:id/delete", () => {
     });
 
     const res = fakeRes();
-    await posts["/api/zones/:id/delete"]({ params: { id: "zone-1" } }, res);
+    await callPost(posts, "/api/zones/:id/delete", { params: { id: "zone-1" } }, res);
 
     expect(res.statusCode).toBe(409);
     expect(deleteClient).not.toHaveBeenCalled();
@@ -230,7 +245,7 @@ describe("POST /api/zones/:id/delete", () => {
     });
 
     const res = fakeRes();
-    await posts["/api/zones/:id/delete"](
+    await callPost(posts, "/api/zones/:id/delete", 
       { params: { id: "does-not-exist" } },
       res,
     );
@@ -249,7 +264,7 @@ describe("POST /api/zones/:id/delete", () => {
     });
 
     const res = fakeRes();
-    await posts["/api/zones/:id/delete"]({ params: { id: "zone-1" } }, res);
+    await callPost(posts, "/api/zones/:id/delete", { params: { id: "zone-1" } }, res);
 
     expect(res.statusCode).toBe(503);
   });
