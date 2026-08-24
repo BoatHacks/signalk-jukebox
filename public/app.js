@@ -208,7 +208,7 @@ const ZONES_URL = `${API_BASE}/api/zones`;
 
 const zoneList = document.getElementById("zoneList");
 const everywhereBtn = document.getElementById("everywhereBtn");
-const zoneRows = new Map(); // zone id -> { row, volumeInput, muteBtn, playBtn, sourceBadge, nameDot }
+const zoneRows = new Map(); // zone id -> { row, volumeInput, muteBtn, deleteBtn, nameDot }
 const draggingZoneVolumes = new Set();
 let lastZones = [];
 
@@ -230,23 +230,27 @@ function buildZoneRow(zone) {
   row.innerHTML = `
     <div class="zone-top">
       <span class="zone-name"><span class="status-dot"></span><span class="name-text"></span></span>
-      <span class="zone-source"></span>
     </div>
     <div class="zone-controls">
-      <div class="source-buttons">
-        <button class="source-btn jukebox" data-source="jukebox">MusicAndAlerts</button>
-        <button class="source-btn alerts" data-source="alerts">Alerts</button>
-        <button class="source-btn silence" data-source="silence">Silence</button>
+      <div class="zone-buttons-row">
+        <div class="source-buttons">
+          <button class="source-btn jukebox" data-source="jukebox">MusicAndAlerts</button>
+          <button class="source-btn alerts" data-source="alerts">Alerts</button>
+          <button class="source-btn silence" data-source="silence">Silence</button>
+        </div>
+        <div class="zone-actions">
+          <button class="icon-btn mute-btn" title="Mute">🔊</button>
+          <button class="icon-btn delete-btn hidden" title="Forget this zone -- only available while it's offline">🗑</button>
+        </div>
       </div>
-      <input type="range" min="0" max="100" value="0">
-      <span class="volume-value">0%</span>
-      <button class="mute-btn">Mute</button>
-      <button class="delete-btn hidden" title="Forget this zone -- only available while it's offline">Delete</button>
+      <div class="zone-volume-row">
+        <input type="range" min="0" max="100" value="0">
+        <span class="volume-value">0%</span>
+      </div>
     </div>
   `;
   const nameDot = row.querySelector(".status-dot");
   const nameText = row.querySelector(".name-text");
-  const sourceBadge = row.querySelector(".zone-source");
   const sourceButtons = Array.from(row.querySelectorAll(".source-btn"));
   const volumeInput = row.querySelector("input[type=range]");
   const volumeValue = row.querySelector(".volume-value");
@@ -316,7 +320,6 @@ function buildZoneRow(zone) {
     row,
     nameDot,
     nameText,
-    sourceBadge,
     sourceButtons,
     volumeInput,
     volumeValue,
@@ -330,15 +333,6 @@ function buildZoneRow(zone) {
 function updateZoneRow(entry, zone) {
   entry.nameDot.classList.toggle("ok", zone.connected);
   entry.nameText.textContent = zone.name || zone.id;
-  entry.sourceBadge.textContent =
-    zone.activeSource === "jukebox"
-      ? "MusicAndAlerts"
-      : zone.activeSource === "alerts"
-        ? "Alerts"
-        : zone.activeSource === "silence"
-          ? "Silence"
-          : "AirPlay";
-  entry.sourceBadge.className = `zone-source ${zone.activeSource}`;
   entry.lastActiveSource = zone.activeSource;
   for (const btn of entry.sourceButtons) {
     btn.classList.toggle("on", btn.dataset.source === zone.activeSource);
@@ -348,7 +342,8 @@ function updateZoneRow(entry, zone) {
     entry.volumeValue.textContent = `${zone.volume}%`;
   }
   entry.lastMuted = zone.muted;
-  entry.muteBtn.textContent = zone.muted ? "Unmute" : "Mute";
+  entry.muteBtn.textContent = zone.muted ? "🔇" : "🔊";
+  entry.muteBtn.title = zone.muted ? "Unmute" : "Mute";
   entry.muteBtn.classList.toggle("muted", zone.muted);
   entry.deleteBtn.classList.toggle("hidden", zone.connected);
 }

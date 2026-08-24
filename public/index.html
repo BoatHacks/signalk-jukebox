@@ -195,7 +195,6 @@
       .zone-top {
         display: flex;
         align-items: center;
-        justify-content: space-between;
         margin-bottom: 0.5rem;
       }
       .zone-name {
@@ -205,42 +204,24 @@
       .zone-name .status-dot {
         margin-right: 0.5rem;
       }
-      .zone-source {
-        font-size: 0.7rem;
-        text-transform: uppercase;
-        letter-spacing: 0.03em;
-        padding: 0.15rem 0.5rem;
-        border-radius: 999px;
-        color: var(--muted);
-        border: 1px solid var(--border);
-      }
-      .zone-source.jukebox {
-        color: #0a0a0a;
-        background: var(--accent);
-        border-color: var(--accent);
-      }
-      .zone-source.airplay {
-        color: #0a0a0a;
-        background: #b28dff;
-        border-color: #b28dff;
-      }
-      .zone-source.alerts {
-        color: #0a0a0a;
-        background: #ffb347;
-        border-color: #ffb347;
-      }
-      .zone-source.silence {
-        color: #fff;
-        background: #64748b;
-        border-color: #64748b;
-      }
       .zone-controls {
         display: flex;
-        align-items: center;
+        flex-direction: column;
         gap: 0.6rem;
+      }
+      .zone-buttons-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
         flex-wrap: wrap;
       }
-      .zone-controls input[type="range"] {
+      .zone-volume-row {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+      }
+      .zone-volume-row input[type="range"] {
         flex: 1;
         accent-color: var(--accent);
       }
@@ -272,13 +253,32 @@
         color: #fff;
         border-color: #64748b;
       }
-      .zone-controls .mute-btn.muted {
+      .zone-actions {
+        display: flex;
+        gap: 0.4rem;
+      }
+      .icon-btn {
+        width: 2rem;
+        height: 2rem;
+        padding: 0;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1rem;
+        flex-shrink: 0;
+      }
+      .mute-btn.muted {
         color: var(--accent);
         border-color: var(--accent);
+        background: rgba(77, 163, 255, 0.15);
       }
       .delete-btn {
         color: #f87171;
         border-color: #f87171;
+      }
+      .delete-btn:hover {
+        background: rgba(248, 113, 113, 0.15);
       }
       .hidden {
         display: none;
