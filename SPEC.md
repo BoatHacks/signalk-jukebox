@@ -432,21 +432,30 @@ confirmed against `@signalk/server-api`'s own `Meta`/`MetaValue` types
   ever seen, alongside its first `values` update (`paths.ts`).
 
 **Playback control inputs** — the reverse direction from the table above:
-these paths are _consumed_, not published, by this plugin. An external
-source (an NMEA2000 momentary switch via another plugin, a webapp button,
-anything that can publish a SignalK delta) sends `1` on press and `0` on
-release; this plugin fires the matching Mopidy action on every `0 -> 1`
-transition and ignores release and any repeated `1` sent without an
-intervening release (`src/controls.ts`, subscribed via
-`app.streambundle.getSelfStream`, the same mechanism §6.5's duck triggers
-use):
+these paths are _consumed_, not published, by this plugin, via two
+independent mechanisms that both end up calling the same Mopidy action.
+(1) A plain delta subscription (`src/controls.ts`'s own
+`registerPlaybackControls`, `app.streambundle.getSelfStream`, the same
+mechanism §6.5's duck triggers use): any source that can publish a
+SignalK delta on the path (an NMEA2000 momentary switch via another
+plugin, a webapp calling `app.handleMessage` directly) sends `1` on press
+and `0` on release; this plugin fires the matching action on every
+`0 -> 1` transition and ignores release and any repeated `1` sent without
+an intervening release. (2) A real, registered SignalK PUT handler
+(`registerPlaybackControlPutHandlers`, `src/put-handlers.ts`) — every
+truthy PUT fires the action once, unconditionally (a PUT is already one
+discrete request, unlike a continuous delta stream, so there's nothing to
+debounce); this is also what makes `supportsPut: true` show up in these
+paths' own meta at all (confirmed via signalk-server's own source: calling
+`registerPutHandler` publishes that meta automatically, as a side effect
+of registering — it isn't something this plugin has to publish itself):
 
 | Path                                               | Value                         |
-| -------------------------------------------------- | ----------------------------- |
-| `entertainment.jukebox.playback.controls.play`     | `0\|1`, momentary, press-edge |
-| `entertainment.jukebox.playback.controls.pause`    | `0\|1`, momentary, press-edge |
-| `entertainment.jukebox.playback.controls.next`     | `0\|1`, momentary, press-edge |
-| `entertainment.jukebox.playback.controls.previous` | `0\|1`, momentary, press-edge |
+| -------------------------------------------------- | ------------------------------ |
+| `entertainment.jukebox.playback.controls.play`     | `0\|1`, momentary, press-edge, PUT-able |
+| `entertainment.jukebox.playback.controls.pause`    | `0\|1`, momentary, press-edge, PUT-able |
+| `entertainment.jukebox.playback.controls.next`     | `0\|1`, momentary, press-edge, PUT-able |
+| `entertainment.jukebox.playback.controls.previous` | `0\|1`, momentary, press-edge, PUT-able |
 
 Not PUT-able (there is nothing to read back — a momentary control has no
 resting state worth exposing) and not published by `paths.ts`. Since a

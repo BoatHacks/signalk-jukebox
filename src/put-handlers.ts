@@ -17,6 +17,10 @@
 import type { StateStore, StateChangeEvent } from "./state/store.js";
 import type { MopidyClient } from "./mopidy-client.js";
 import type { SnapserverClientState } from "./routes.js";
+import {
+  PLAYBACK_CONTROL_PATHS,
+  type PlaybackControlAction,
+} from "./controls.js";
 
 /** SignalK's own convention for a level/percentage-like quantity is a
  * 0-1 ratio (paths.ts publishes these paths that way) -- a PUT to the
@@ -102,6 +106,78 @@ export function registerPlaybackVolumePutHandler(
       return { state: "PENDING" };
     },
   );
+}
+
+/** A PUT value counts as "pressed" the same lenient way controls.ts's own
+ * plain-delta-subscription path does (any truthy/nonzero value, not
+ * strictly `=== 1`) -- kept consistent between the two ways of firing the
+ * same action. `0`/`false` completes successfully as a no-op (the
+ * "release" half of a momentary control), rather than erroring. */
+function isPressedPutValue(value: unknown): boolean {
+  return value === true || value === 1;
+}
+
+/**
+ * Registers a real PUT handler for each of the four
+ * `entertainment.jukebox.playback.controls.*` paths (SPEC.md §6.2) --
+ * `controls.ts`'s own `registerControlsMeta`/`registerPlaybackControls`
+ * only ever *subscribe* to these paths via `app.streambundle`, which
+ * reacts to a delta from ANY source (another plugin calling
+ * `app.handleMessage` directly, an N2K switch translation, etc) but does
+ * NOT make the path answer a genuine SignalK PUT request -- that needs an
+ * actual `registerPutHandler`, confirmed by reading signalk-server's own
+ * source (`src/interfaces/plugins.ts`): the real `app.registerPutHandler`
+ * wrapper automatically publishes `meta: [{path, value: {supportsPut:
+ * true}}]` the moment it's called, merging into whatever meta
+ * `registerControlsMeta` already published (`description`) -- so this is
+ * also what makes `supportsPut: true` show up for these paths at all,
+ * with no separate meta call needed here for that specific field.
+ *
+ * Unlike the momentary-switch delta subscription (which debounces a
+ * repeated `1` sent without an intervening `0`, since a physical switch's
+ * driver may republish current state periodically), a PUT is already a
+ * single discrete request -- there's no continuous stream to debounce,
+ * so every truthy PUT just fires the action once, unconditionally.
+ */
+export function registerPlaybackControlPutHandlers(
+  app: PutHandlerAppLike,
+  mopidyState: MopidyClientState,
+): void {
+  const actions: Record<PlaybackControlAction, () => Promise<unknown>> = {
+    play: () => mopidyState.client!.play(),
+    pause: () => mopidyState.client!.pause(),
+    next: () => mopidyState.client!.next(),
+    previous: () => mopidyState.client!.previous(),
+  };
+
+  for (const action of Object.keys(actions) as PlaybackControlAction[]) {
+    app.registerPutHandler(
+      SELF,
+      PLAYBACK_CONTROL_PATHS[action],
+      (_context, _path, value, callback) => {
+        if (!isPressedPutValue(value)) {
+          return { state: "COMPLETED", statusCode: 200 };
+        }
+        if (!mopidyState.client) {
+          return {
+            state: "COMPLETED",
+            statusCode: 503,
+            message: "container not ready yet",
+          };
+        }
+        actions[action]()
+          .then(() => callback({ state: "COMPLETED", statusCode: 200 }))
+          .catch((err: unknown) => {
+            callback({
+              state: "COMPLETED",
+              statusCode: 502,
+              message: String(err),
+            });
+          });
+        return { state: "PENDING" };
+      },
+    );
+  }
 }
 
 /**

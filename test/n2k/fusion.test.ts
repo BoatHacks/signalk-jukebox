@@ -17,25 +17,46 @@ import {
 } from "@canboat/ts-pgns";
 import type { PlaybackState, Zone } from "../../src/types.js";
 
+interface EmittedPgn {
+  fields: Record<string, unknown>;
+}
+
 // A real, modern-version app object -- confirmed by reading
 // convertCamelCase's own source that it reads config.version to decide
 // whether to pass a PGN's fields through unchanged (>=2.15.0) or convert
 // them; every test app here is "new enough", so emit() always receives
 // the constructed PGN instance itself, unmodified.
-function fakeApp(): FusionAppLike & { emit: ReturnType<typeof vi.fn> } {
-  return {
+function fakeApp() {
+  const emit = vi.fn<(event: string, payload?: unknown) => void>();
+  const app: FusionAppLike = {
     config: { version: "2.20.0" },
-    emit: vi.fn(),
+    emit,
   };
+  return { app, emit };
 }
 
-function pgnsOfType<T>(
+function emittedPgns(emit: ReturnType<typeof vi.fn>): EmittedPgn[] {
+  return emit.mock.calls.map((call) => call[1] as EmittedPgn);
+}
+
+function pgnsOfType<T extends EmittedPgn>(
   emit: ReturnType<typeof vi.fn>,
-  ctor: { isMatch: (pgn: unknown) => boolean },
+  ctor: { isMatch: (pgn: never) => boolean },
 ): T[] {
-  return emit.mock.calls
-    .map((call) => call[1])
-    .filter((pgn): pgn is T => ctor.isMatch(pgn));
+  return emittedPgns(emit).filter((pgn) => ctor.isMatch(pgn as never)) as T[];
+}
+
+/** The first emitted PGN whose `fields` object has the given key set --
+ * throws (failing the test with a clear message) rather than returning
+ * undefined, so every caller gets a real, non-optional EmittedPgn back. */
+function firstWithField(emit: ReturnType<typeof vi.fn>, field: string): EmittedPgn {
+  const found = emittedPgns(emit).find((pgn) => pgn.fields[field] !== undefined);
+  if (!found) throw new Error(`no emitted PGN had a "${field}" field`);
+  return found;
+}
+
+function allWithField(emit: ReturnType<typeof vi.fn>, field: string): EmittedPgn[] {
+  return emittedPgns(emit).filter((pgn) => pgn.fields[field] !== undefined);
 }
 
 const basePlayback: PlaybackState = {
@@ -60,27 +81,21 @@ function makeZone(overrides: Partial<Zone> = {}): Zone {
 
 describe("FusionAdapter.broadcastState", () => {
   it("always broadcasts source and Mopidy's own track when no zone is on AirPlay", () => {
-    const app = fakeApp();
+    const { app, emit } = fakeApp();
     const adapter = new FusionAdapter({ deviceName: "Jukebox", app });
 
     adapter.broadcastState(basePlayback, [makeZone({ n2kZone: 0 })]);
 
-    const sourcePgns = pgnsOfType<PGN_130820_FusionSource>(app.emit, PGN_130820_FusionSource);
+    const sourcePgns = pgnsOfType<EmittedPgn>(emit, PGN_130820_FusionSource);
     expect(sourcePgns).toHaveLength(1);
-    expect(sourcePgns[0].fields.source).toBe("Jukebox");
+    expect(sourcePgns[0]?.fields.source).toBe("Jukebox");
 
-    const trackCalls = app.emit.mock.calls.filter(
-      (c) => c[1]?.fields?.track !== undefined,
-    );
-    expect(trackCalls[0][1].fields.track).toBe("Groove Salad");
-    const artistCalls = app.emit.mock.calls.filter(
-      (c) => c[1]?.fields?.artist !== undefined,
-    );
-    expect(artistCalls[0][1].fields.artist).toBe("SomaFM");
+    expect(firstWithField(emit, "track").fields.track).toBe("Groove Salad");
+    expect(firstWithField(emit, "artist").fields.artist).toBe("SomaFM");
   });
 
   it("broadcasts the lowest-n2kZone AirPlay zone's real track instead of Mopidy's, when one zone is on AirPlay", () => {
-    const app = fakeApp();
+    const { app, emit } = fakeApp();
     const adapter = new FusionAdapter({ deviceName: "Jukebox", app });
 
     const zones = [
@@ -94,24 +109,22 @@ describe("FusionAdapter.broadcastState", () => {
 
     adapter.broadcastState(basePlayback, zones);
 
-    const trackCalls = app.emit.mock.calls.filter((c) => c[1]?.fields?.track !== undefined);
-    expect(trackCalls[0][1].fields.track).toBe("AirPlay Song");
+    expect(firstWithField(emit, "track").fields.track).toBe("AirPlay Song");
   });
 
   it("falls back to the AirPlay placeholder when the AirPlay zone has no metadata yet", () => {
-    const app = fakeApp();
+    const { app, emit } = fakeApp();
     const adapter = new FusionAdapter({ deviceName: "Jukebox", app });
 
     const zones = [makeZone({ n2kZone: 0, activeSource: "airplay", airplay: { streamName: "s", connected: true } })];
 
     adapter.broadcastState(basePlayback, zones);
 
-    const trackCalls = app.emit.mock.calls.filter((c) => c[1]?.fields?.track !== undefined);
-    expect(trackCalls[0][1].fields.track).toBe("AirPlay Active");
+    expect(firstWithField(emit, "track").fields.track).toBe("AirPlay Active");
   });
 
   it("tie-breaks two simultaneous AirPlay zones by the lowest n2kZone", () => {
-    const app = fakeApp();
+    const { app, emit } = fakeApp();
     const adapter = new FusionAdapter({ deviceName: "Jukebox", app });
 
     const zones = [
@@ -131,22 +144,20 @@ describe("FusionAdapter.broadcastState", () => {
 
     adapter.broadcastState(basePlayback, zones);
 
-    const trackCalls = app.emit.mock.calls.filter((c) => c[1]?.fields?.track !== undefined);
-    expect(trackCalls[0][1].fields.track).toBe("Should Win");
+    expect(firstWithField(emit, "track").fields.track).toBe("Should Win");
   });
 
   it("reflects master mute state", () => {
-    const app = fakeApp();
+    const { app, emit } = fakeApp();
     const adapter = new FusionAdapter({ deviceName: "Jukebox", app });
 
     adapter.broadcastState({ ...basePlayback, muted: true }, []);
 
-    const muteCalls = app.emit.mock.calls.filter((c) => c[1]?.fields?.mute !== undefined);
-    expect(muteCalls[0][1].fields.mute).toBe(FusionMuteCommand.MuteOn);
+    expect(firstWithField(emit, "mute").fields.mute).toBe(FusionMuteCommand.MuteOn);
   });
 
   it("broadcasts per-zone volumes/names only for zones with an n2kZone, mapped by slot", () => {
-    const app = fakeApp();
+    const { app, emit } = fakeApp();
     const adapter = new FusionAdapter({ deviceName: "Jukebox", app });
 
     const zones = [
@@ -157,33 +168,36 @@ describe("FusionAdapter.broadcastState", () => {
 
     adapter.broadcastState(basePlayback, zones);
 
-    const volumeCalls = app.emit.mock.calls.filter((c) => c[1]?.fields?.zone1 !== undefined || c[1]?.fields?.zone2 !== undefined || c[1]?.fields?.zone3 !== undefined);
+    const volumeCalls = emittedPgns(emit).filter(
+      (pgn) => pgn.fields.zone1 !== undefined || pgn.fields.zone2 !== undefined || pgn.fields.zone3 !== undefined,
+    );
     expect(volumeCalls).toHaveLength(1);
-    expect(volumeCalls[0][1].fields.zone1).toBe(10);
-    expect(volumeCalls[0][1].fields.zone2).toBeUndefined();
-    expect(volumeCalls[0][1].fields.zone3).toBe(30);
-    expect(volumeCalls[0][1].fields.zone4).toBeUndefined();
+    const volumes = volumeCalls[0];
+    if (!volumes) throw new Error("expected a volumes PGN");
+    expect(volumes.fields.zone1).toBe(10);
+    expect(volumes.fields.zone2).toBeUndefined();
+    expect(volumes.fields.zone3).toBe(30);
+    expect(volumes.fields.zone4).toBeUndefined();
 
-    const zoneNameCalls = app.emit.mock.calls.filter((c) => c[1]?.fields?.number !== undefined);
-    const names = zoneNameCalls.map((c) => [c[1].fields.number, c[1].fields.name]);
+    const zoneNameCalls = allWithField(emit, "number");
+    const names = zoneNameCalls.map((pgn) => [pgn.fields.number, pgn.fields.name]);
     expect(names).toContainEqual([0, "Salon"]);
     expect(names).toContainEqual([2, "Cockpit"]);
     expect(names).not.toContainEqual([undefined, "Unassigned"]);
   });
 
   it("skips volume/zone-name broadcasts entirely when no zone has an n2kZone", () => {
-    const app = fakeApp();
+    const { app, emit } = fakeApp();
     const adapter = new FusionAdapter({ deviceName: "Jukebox", app });
 
     adapter.broadcastState(basePlayback, [makeZone({ n2kZone: undefined })]);
 
-    const volumeCalls = app.emit.mock.calls.filter((c) => c[1]?.fields?.zone1 !== undefined);
-    expect(volumeCalls).toHaveLength(0);
+    expect(allWithField(emit, "zone1")).toHaveLength(0);
   });
 });
 
 describe("FusionAdapter.decodeIncoming", () => {
-  const app = fakeApp();
+  const { app } = fakeApp();
   const adapter = new FusionAdapter({ deviceName: "Jukebox", app });
 
   it.each([

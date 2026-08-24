@@ -17,6 +17,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   never shows up anywhere in `/signalk/v1/api/...`'s tree at all, only
   via its own dedicated `/meta` sub-route. Now publishes an initial value
   (`0`, released) alongside the meta.
+- Those same four paths now also register a real SignalK PUT handler
+  (`registerPlaybackControlPutHandlers`), so they answer an actual PUT
+  request, not just a plain delta subscription — and, confirmed via
+  signalk-server's own source, this is what makes `supportsPut: true`
+  show up in their meta at all (registering a PUT handler publishes that
+  automatically; it isn't something this plugin has to publish itself).
 
 ### Added
 

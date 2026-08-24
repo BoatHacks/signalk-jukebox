@@ -32,6 +32,7 @@ import {
 } from "./controls.js";
 import {
   registerPlaybackVolumePutHandler,
+  registerPlaybackControlPutHandlers,
   registerZonePutHandlers,
   type MopidyClientState,
   type PutHandlerAppLike,
@@ -110,15 +111,23 @@ export default function plugin(app: App) {
       // "container not ready yet" guard (mopidyState.client /
       // snapserverState.client) covers the gap until it is.
       registerPlaybackVolumePutHandler(app, mopidyState, store);
+      // Same "up front" reasoning as the volume handler above -- also
+      // what makes entertainment.jukebox.playback.controls.* answer a
+      // real SignalK PUT request at all, and publishes their
+      // `supportsPut: true` meta as a side effect of registering
+      // (put-handlers.ts's own doc comment on this function).
+      registerPlaybackControlPutHandlers(app, mopidyState);
       stopZonePutHandlers = registerZonePutHandlers(
         app,
         snapserverState,
         store,
       );
-      // Meta-only, no value -- makes the controls.* paths discoverable
-      // in the Data Browser immediately, rather than only existing once
-      // some external source (a pushbutton, a webapp) sends the first
-      // real delta (controls.ts's own doc comment).
+      // Publishes description meta + an initial value (0, released) for
+      // the controls.* paths, so they show up in the Data Browser / any
+      // path picker immediately rather than only existing once something
+      // first presses one (controls.ts's own doc comment) -- independent
+      // of registerPlaybackControlPutHandlers above, which separately
+      // adds their supportsPut meta.
       registerControlsMeta(app, jukebox.id);
 
       startSafely(app, async () => {

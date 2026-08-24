@@ -1,12 +1,14 @@
 import { describe, it, expect, vi } from "vitest";
 import {
   registerPlaybackVolumePutHandler,
+  registerPlaybackControlPutHandlers,
   registerZonePutHandlers,
   type ActionHandler,
   type ActionResult,
   type PutHandlerAppLike,
   type MopidyClientState,
 } from "../src/put-handlers.js";
+import { PLAYBACK_CONTROL_PATHS } from "../src/controls.js";
 import type { SnapserverClientState } from "../src/routes.js";
 import { StateStore, createInitialState } from "../src/state/store.js";
 import type { MopidyClient } from "../src/mopidy-client.js";
@@ -82,6 +84,84 @@ describe("registerPlaybackVolumePutHandler", () => {
     expect(setVolume).toHaveBeenCalledWith(42);
     expect(store.getPlayback().volume).toBe(42);
     expect(result.statusCode).toBe(200);
+  });
+});
+
+describe("registerPlaybackControlPutHandlers", () => {
+  function fakeMopidy(): MopidyClient & Record<string, ReturnType<typeof vi.fn>> {
+    return {
+      play: vi.fn().mockResolvedValue(undefined),
+      pause: vi.fn().mockResolvedValue(undefined),
+      next: vi.fn().mockResolvedValue(undefined),
+      previous: vi.fn().mockResolvedValue(undefined),
+    } as unknown as MopidyClient & Record<string, ReturnType<typeof vi.fn>>;
+  }
+
+  it("registers a real PUT handler for all four control paths", () => {
+    const { app, handlers } = fakeApp();
+    registerPlaybackControlPutHandlers(app, { client: null });
+
+    expect(new Set(handlers.keys())).toEqual(
+      new Set(Object.values(PLAYBACK_CONTROL_PATHS)),
+    );
+  });
+
+  it.each(["play", "pause", "next", "previous"] as const)(
+    "a truthy PUT to %s calls the matching MopidyClient method",
+    async (action) => {
+      const { app, handlers } = fakeApp();
+      const mopidy = fakeMopidy();
+      registerPlaybackControlPutHandlers(app, { client: mopidy });
+
+      const result = await callHandler(
+        handlers.get(PLAYBACK_CONTROL_PATHS[action])!,
+        1,
+      );
+
+      expect(mopidy[action]).toHaveBeenCalledTimes(1);
+      expect(result.statusCode).toBe(200);
+    },
+  );
+
+  it("a falsy PUT (0/false -- the release half) is a no-op, not an error", async () => {
+    const { app, handlers } = fakeApp();
+    const mopidy = fakeMopidy();
+    registerPlaybackControlPutHandlers(app, { client: mopidy });
+
+    const result = await callHandler(
+      handlers.get(PLAYBACK_CONTROL_PATHS.play)!,
+      0,
+    );
+
+    expect(mopidy.play).not.toHaveBeenCalled();
+    expect(result.statusCode).toBe(200);
+  });
+
+  it("503s when the container isn't ready yet", async () => {
+    const { app, handlers } = fakeApp();
+    registerPlaybackControlPutHandlers(app, { client: null });
+
+    const result = await callHandler(
+      handlers.get(PLAYBACK_CONTROL_PATHS.play)!,
+      1,
+    );
+
+    expect(result.statusCode).toBe(503);
+  });
+
+  it("reports a backend failure via a 502, not a thrown error", async () => {
+    const { app, handlers } = fakeApp();
+    const mopidy = fakeMopidy();
+    (mopidy.play as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("connection refused"));
+    registerPlaybackControlPutHandlers(app, { client: mopidy });
+
+    const result = await callHandler(
+      handlers.get(PLAYBACK_CONTROL_PATHS.play)!,
+      1,
+    );
+
+    expect(result.statusCode).toBe(502);
+    expect(result.message).toContain("connection refused");
   });
 });
 
