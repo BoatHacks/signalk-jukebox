@@ -53,9 +53,18 @@ let lastState = "stopped";
 
 async function refresh() {
   try {
-    const [state, track, volume] = await Promise.all([
+    const [state, track, streamTitle, volume] = await Promise.all([
       rpc("core.playback.get_state"),
       rpc("core.playback.get_current_track"),
+      // For a radio stream, track.name is the STATIC station metadata baked
+      // into the stream URI itself (e.g. "Groove Salad: a nicely chilled
+      // plate of ambient beats and grooves. [SomaFM]") -- it never changes
+      // for as long as that station plays. The actual currently-playing
+      // song ("zero cult - seclusion") is separate, live ICY metadata
+      // Mopidy surfaces only through this call, not get_current_track.
+      // null for anything that isn't a stream (local files, Spotify), where
+      // track.name/artists already are the real per-song info.
+      rpc("core.playback.get_stream_title"),
       rpc("core.mixer.get_volume"),
     ]);
 
@@ -65,9 +74,14 @@ async function refresh() {
     els.playPauseBtn.textContent = state === "playing" ? "⏸" : "▶";
 
     if (track) {
-      els.track.textContent = track.name || "(untitled)";
-      const artists = (track.artists || []).map((a) => a.name).join(", ");
-      els.artist.textContent = artists;
+      if (streamTitle) {
+        els.track.textContent = streamTitle;
+        els.artist.textContent = track.name || "";
+      } else {
+        els.track.textContent = track.name || "(untitled)";
+        const artists = (track.artists || []).map((a) => a.name).join(", ");
+        els.artist.textContent = artists;
+      }
     } else {
       els.track.textContent = "Nothing playing";
       els.artist.textContent = "";
