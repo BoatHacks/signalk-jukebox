@@ -144,18 +144,66 @@ els.playUriBtn.addEventListener("click", async () => {
   refresh();
 });
 
+// Live updates: Mopidy's own WebSocket (ws://<host>:6680/mopidy/ws, same
+// direct-port bypass as MOPIDY_PORT/SNAPWEB_PORT above -- proxy.ts can't
+// forward this). Confirmed by connecting to the live container: every
+// core event Mopidy pushes here arrives as flat JSON with an "event" key
+// alongside its own data (e.g. {"volume":42,"event":"volume_changed"}),
+// NOT wrapped as a JSON-RPC notification -- so events are told apart from
+// RPC responses (which always carry an "id") by the absence of one.
+// Rather than hand-apply each event's own partial shape, any relevant
+// event just re-runs the same refresh() used for the initial load --
+// infrequent (only on a real change, not a timer) and reuses
+// already-correct display logic instead of duplicating it.
+const MOPIDY_WS_URL = `ws://${location.hostname}:${MOPIDY_PORT}/mopidy/ws`;
+const RELEVANT_MOPIDY_EVENTS = new Set([
+  "playback_state_changed",
+  "track_playback_started",
+  "track_playback_resumed",
+  "track_playback_paused",
+  "track_playback_ended",
+  "stream_title_changed",
+  "volume_changed",
+  "tracklist_changed",
+]);
+let mopidyRefreshDebounce = null;
+
+function scheduleMopidyRefresh() {
+  clearTimeout(mopidyRefreshDebounce);
+  mopidyRefreshDebounce = setTimeout(refresh, 50);
+}
+
+function connectMopidyWs() {
+  const ws = new WebSocket(MOPIDY_WS_URL);
+  ws.addEventListener("open", () => refresh());
+  ws.addEventListener("message", (ev) => {
+    let data;
+    try {
+      data = JSON.parse(ev.data);
+    } catch {
+      return;
+    }
+    if (data.event && RELEVANT_MOPIDY_EVENTS.has(data.event)) {
+      scheduleMopidyRefresh();
+    }
+  });
+  ws.addEventListener("close", () => {
+    els.statusDot.classList.remove("ok");
+    els.state.textContent = "disconnected";
+    setTimeout(connectMopidyWs, 2000);
+  });
+  ws.addEventListener("error", () => ws.close());
+}
+
 refresh();
-setInterval(refresh, 2000);
+connectMopidyWs();
 
 // --- Zones (source/zone picker) -------------------------------------------
-// API_BASE + "/api/zones" is this plugin's own REST route (routes.ts), not
-// proxied through to the container the way RPC_URL is -- on this copy of
-// the file (served by the container itself), it only resolves when this
-// page is reached through the plugin's reverse proxy, not when hitting the
-// container's own port directly. That's expected: zone/source control
-// needs the plugin's Snapserver connection, which only exists on the
-// proxied path. public/app.js's absolute API_BASE resolves this
-// unconditionally, since it always goes through the plugin's own router.
+// Mutations (source/volume/mute) still go through this plugin's own proxied
+// REST route (routes.ts) -- that's what actually holds the authenticated
+// Snapserver control connection, and it's what enforces the three-value
+// "jukebox"/"alerts"/"silence" contract. ZONES_URL is only used for that;
+// live status is no longer polled from it (see SNAPCAST_WS_URL below).
 const ZONES_URL = `${API_BASE}/api/zones`;
 
 const zoneList = document.getElementById("zoneList");
@@ -215,7 +263,6 @@ function buildZoneRow(zone) {
   for (const btn of sourceButtons) {
     btn.addEventListener("click", async () => {
       await zonePost(zone.id, "source", { source: btn.dataset.source });
-      refreshZones();
     });
   }
 
@@ -231,14 +278,12 @@ function buildZoneRow(zone) {
   volumeInput.addEventListener("change", async (e) => {
     await zonePost(zone.id, "volume", { volume: Number(e.target.value) });
     draggingZoneVolumes.delete(zone.id);
-    refreshZones();
   });
 
   muteBtn.addEventListener("click", async () => {
     const entry = zoneRows.get(zone.id);
     const nextMuted = !entry.lastMuted;
     await zonePost(zone.id, "mute", { muted: nextMuted });
-    refreshZones();
   });
 
   return {
@@ -280,40 +325,58 @@ function updateZoneRow(entry, zone) {
   entry.muteBtn.classList.toggle("muted", zone.muted);
 }
 
-async function refreshZones() {
-  try {
-    const res = await fetch(ZONES_URL);
-    if (!res.ok) throw new Error("zones unavailable");
-    const zones = await res.json();
-    lastZones = zones;
+// zone.id/name/connected/volume/muted are exactly Snapcast's own
+// client.id/client.config.name/client.connected/client.config.volume.
+// activeSource is derived the same way zone-sync.ts derives it server-side
+// (JUKEBOX_STREAM_ID/ALERTS_STREAM_ID/SILENCE_STREAM_ID, else "airplay") --
+// duplicated here because this renders directly from Snapserver's own raw
+// status, not from routes.ts's already-computed /api/zones shape.
+function renderZonesFromServer(server) {
+  const zones = [];
+  for (const group of server.groups || []) {
+    const activeSource =
+      group.stream_id === "MusicAndAlerts"
+        ? "jukebox"
+        : group.stream_id === "Alerts"
+          ? "alerts"
+          : group.stream_id === "Silence"
+            ? "silence"
+            : "airplay";
+    for (const client of group.clients || []) {
+      zones.push({
+        id: client.id,
+        name: client.config.name,
+        connected: client.connected,
+        volume: client.config.volume.percent,
+        muted: client.config.volume.muted,
+        activeSource,
+      });
+    }
+  }
+  lastZones = zones;
 
-    const seen = new Set();
-    for (const zone of zones) {
-      seen.add(zone.id);
-      let entry = zoneRows.get(zone.id);
-      if (!entry) {
-        entry = buildZoneRow(zone);
-        zoneRows.set(zone.id, entry);
-        zoneList.appendChild(entry.row);
-      }
-      updateZoneRow(entry, zone);
+  const seen = new Set();
+  for (const zone of zones) {
+    seen.add(zone.id);
+    let entry = zoneRows.get(zone.id);
+    if (!entry) {
+      entry = buildZoneRow(zone);
+      zoneRows.set(zone.id, entry);
+      zoneList.appendChild(entry.row);
     }
-    for (const [id, entry] of zoneRows) {
-      if (!seen.has(id)) {
-        entry.row.remove();
-        zoneRows.delete(id);
-      }
+    updateZoneRow(entry, zone);
+  }
+  for (const [id, entry] of zoneRows) {
+    if (!seen.has(id)) {
+      entry.row.remove();
+      zoneRows.delete(id);
     }
-    if (zones.length === 0) {
-      zoneList.innerHTML = '<div class="zone-empty">No zones connected</div>';
-    } else if (zoneList.querySelector(".zone-empty")) {
-      zoneList.innerHTML = "";
-      for (const entry of zoneRows.values()) zoneList.appendChild(entry.row);
-    }
-  } catch {
-    // Zone control isn't available on this path (e.g. hitting the
-    // container directly, not through the plugin's proxy) -- leave
-    // whatever was last shown rather than clearing it on a blip.
+  }
+  if (zones.length === 0) {
+    zoneList.innerHTML = '<div class="zone-empty">No zones connected</div>';
+  } else if (zoneList.querySelector(".zone-empty")) {
+    zoneList.innerHTML = "";
+    for (const entry of zoneRows.values()) zoneList.appendChild(entry.row);
   }
 }
 
@@ -323,7 +386,6 @@ everywhereBtn.addEventListener("click", async () => {
       zonePost(zone.id, "source", { source: "jukebox" }).catch(() => {}),
     ),
   );
-  refreshZones();
 });
 
 document.getElementById("musicboxLink").href =
@@ -331,5 +393,49 @@ document.getElementById("musicboxLink").href =
 document.getElementById("snapwebLink").href =
   `http://${location.hostname}:${SNAPWEB_PORT}/`;
 
-refreshZones();
-setInterval(refreshZones, 2000);
+// Live zone status: Snapserver's own WebSocket JSON-RPC endpoint, the same
+// port ("/jsonrpc" on SNAPWEB_PORT) Snapweb itself already uses -- another
+// direct-port bypass of proxy.ts, same reasoning as MOPIDY_WS_URL above.
+// Confirmed live: mutations (e.g. Group.SetMute, issued here via zonePost
+// against the plugin's own authenticated route, not this socket) produce a
+// specific push notification (e.g. {"jsonrpc":"2.0","method":"Group.OnMute",
+// "params":{...}}), not a uniform "Server.OnUpdate" with the full state --
+// Snapcast's docs show Server.OnUpdate accompanying only some requests
+// (e.g. Group.SetClients). Rather than hand-apply each notification's own
+// shape, any notification (no "id", has a "method") just re-requests
+// Server.GetStatus and re-renders from that -- same "re-run the known-good
+// renderer on a change signal" approach as the Mopidy side.
+const SNAPCAST_WS_URL = `ws://${location.hostname}:${SNAPWEB_PORT}/jsonrpc`;
+let snapRpcId = 0;
+
+function connectSnapWs() {
+  const ws = new WebSocket(SNAPCAST_WS_URL);
+  const send = (method) => {
+    if (ws.readyState !== WebSocket.OPEN) return;
+    snapRpcId += 1;
+    ws.send(JSON.stringify({ id: snapRpcId, jsonrpc: "2.0", method }));
+  };
+  ws.addEventListener("open", () => send("Server.GetStatus"));
+  ws.addEventListener("message", (ev) => {
+    let data;
+    try {
+      data = JSON.parse(ev.data);
+    } catch {
+      return;
+    }
+    if (data.result && data.result.server) {
+      renderZonesFromServer(data.result.server);
+    } else if (data.method) {
+      send("Server.GetStatus");
+    }
+  });
+  ws.addEventListener("close", () => {
+    // Leave whatever was last shown rather than clearing it on a blip (e.g.
+    // hitting the container directly, not through the plugin's proxy, where
+    // this port isn't reachable at all).
+    setTimeout(connectSnapWs, 2000);
+  });
+  ws.addEventListener("error", () => ws.close());
+}
+
+connectSnapWs();

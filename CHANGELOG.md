@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- The webapp (`public/app.js`) no longer polls every 2 seconds. Playback
+  status now updates live from Mopidy's own WebSocket
+  (`ws://<host>:6680/mopidy/ws`, same direct-port bypass as the
+  Mopidy-MusicBox-Webclient/Snapweb links, since `proxy.ts` can't forward a
+  WebSocket upgrade) — confirmed live that Mopidy pushes each core event as
+  flat JSON (`{...data, "event": "<name>"}`, not a JSON-RPC notification).
+  Zone status now updates live from Snapserver's own WebSocket JSON-RPC
+  endpoint (`ws://<host>:1780/jsonrpc`, the same port Snapweb already uses)
+  — confirmed live that a state-changing request produces a specific push
+  notification (e.g. `Group.OnMute`/`Client.OnVolumeChanged`), not a
+  uniform full-state broadcast, so any notification just triggers a fresh
+  `Server.GetStatus` and a full re-render rather than hand-applying each
+  notification's own shape. Zone/source/volume/mute mutations still go
+  through this plugin's own proxied REST route (`/api/zones/...`), which is
+  what actually holds the authenticated Snapserver control connection.
+
 ### Added
 
 - `dataMount`, mounting this plugin's own persistent data dir at `/data` —

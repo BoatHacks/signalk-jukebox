@@ -132,6 +132,19 @@ other directly) when a command arrives on its interface.
   Snapserver: confirmed by build-testing that putting Snapweb's `[http]`
   section on the same port as the control API's `[tcp-control]` breaks
   HTTP parsing for the shared port entirely (§12).
+- The plugin's own `public/app.js` webapp connects directly to both
+  `MOPIDY_PORT`'s `/mopidy/ws` and `SNAPWEB_PORT`'s `/jsonrpc` for live
+  playback/zone updates, the same direct-port bypass as the two bullets
+  above (for the same reason: `proxy.ts` can't forward either WebSocket
+  upgrade). Confirmed live: Mopidy pushes each core event as flat JSON
+  with an `"event"` key (not a JSON-RPC notification); Snapserver pushes
+  event-specific notifications (`Group.OnMute`, `Client.OnVolumeChanged`,
+  etc.), not a uniform full-state broadcast, so the webapp just
+  re-requests `Server.GetStatus` on any notification and re-renders from
+  that rather than hand-applying each shape. Mutations (play/pause/
+  volume, zone source/volume/mute) still go through the proxied Mopidy
+  RPC endpoint and `/api/zones` REST route respectively — only the
+  read/live-update path bypasses the proxy.
 - A second Snapcast stream, `"Alerts"` (`ALERTS_STREAM_ID`, container.ts),
   is a standing announcement intake (Snapcast's `tcp server` source type,
   `ALERTS_PORT` 4953) any other container/process can connect to and
