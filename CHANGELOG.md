@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- A "Delete" button on each zone in the webapp, for a zone that's been
+  decommissioned and is never coming back (a Snapclient that's been
+  physically removed, say) — only shown/allowed while the zone is
+  offline, so it stops sitting there forever as "offline" instead of just
+  disappearing. Backed by a new `POST /api/zones/:id/delete` route
+  (`Server.DeleteClient` against Snapserver, `SnapserverClient.deleteClient`)
+  that 409s if the zone is still connected — deleting a live one would
+  just have it reappear on its next reconnect, so this makes the user
+  confirm it's actually gone first.
+
 ### Changed
 
 - The webapp (`public/app.js`) no longer polls every 2 seconds. Playback

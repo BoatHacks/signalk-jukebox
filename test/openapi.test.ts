@@ -49,6 +49,7 @@ describe("openApiDocument", () => {
       "/api/zones/{id}/volume",
       "/api/zones/{id}/mute",
       "/api/zones/{id}/source",
+      "/api/zones/{id}/delete",
       "/api/satellites",
       "/api/versions",
       "/api/update/check",

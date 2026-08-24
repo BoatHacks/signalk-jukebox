@@ -179,3 +179,78 @@ describe("POST /api/zones/:id/source", () => {
     expect(res.statusCode).toBe(503);
   });
 });
+
+describe("POST /api/zones/:id/delete", () => {
+  it("deletes a disconnected zone", async () => {
+    const store = makeStore({ ...zone, connected: false });
+    const deleteClient = vi.fn().mockResolvedValue(undefined);
+    const { router, posts } = fakeRouter();
+    registerRoutes({
+      router,
+      store,
+      snapserver: { client: { deleteClient } as unknown as SnapserverClient },
+      app: { getSelfPath: () => undefined },
+    });
+
+    const res = fakeRes();
+    await posts["/api/zones/:id/delete"]({ params: { id: "zone-1" } }, res);
+
+    expect(deleteClient).toHaveBeenCalledWith("zone-1");
+    expect(res.body).toEqual({ ok: true });
+    expect(store.getZone("zone-1")).toBeUndefined();
+  });
+
+  it("refuses to delete a still-connected zone", async () => {
+    const store = makeStore({ ...zone, connected: true });
+    const deleteClient = vi.fn();
+    const { router, posts } = fakeRouter();
+    registerRoutes({
+      router,
+      store,
+      snapserver: { client: { deleteClient } as unknown as SnapserverClient },
+      app: { getSelfPath: () => undefined },
+    });
+
+    const res = fakeRes();
+    await posts["/api/zones/:id/delete"]({ params: { id: "zone-1" } }, res);
+
+    expect(res.statusCode).toBe(409);
+    expect(deleteClient).not.toHaveBeenCalled();
+    expect(store.getZone("zone-1")).toBeDefined();
+  });
+
+  it("404s for an unknown zone", async () => {
+    const store = makeStore(zone);
+    const { router, posts } = fakeRouter();
+    registerRoutes({
+      router,
+      store,
+      snapserver: { client: {} as unknown as SnapserverClient },
+      app: { getSelfPath: () => undefined },
+    });
+
+    const res = fakeRes();
+    await posts["/api/zones/:id/delete"](
+      { params: { id: "does-not-exist" } },
+      res,
+    );
+
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("503s when the container isn't ready yet", async () => {
+    const store = makeStore({ ...zone, connected: false });
+    const { router, posts } = fakeRouter();
+    registerRoutes({
+      router,
+      store,
+      snapserver: { client: null },
+      app: { getSelfPath: () => undefined },
+    });
+
+    const res = fakeRes();
+    await posts["/api/zones/:id/delete"]({ params: { id: "zone-1" } }, res);
+
+    expect(res.statusCode).toBe(503);
+  });
+});

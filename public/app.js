@@ -241,6 +241,7 @@ function buildZoneRow(zone) {
       <input type="range" min="0" max="100" value="0">
       <span class="volume-value">0%</span>
       <button class="mute-btn">Mute</button>
+      <button class="delete-btn hidden" title="Forget this zone -- only available while it's offline">Delete</button>
     </div>
   `;
   const nameDot = row.querySelector(".status-dot");
@@ -250,6 +251,7 @@ function buildZoneRow(zone) {
   const volumeInput = row.querySelector("input[type=range]");
   const volumeValue = row.querySelector(".volume-value");
   const muteBtn = row.querySelector(".mute-btn");
+  const deleteBtn = row.querySelector(".delete-btn");
 
   // Three exclusive states, not a toggle: "jukebox" is the auto-ducking
   // combined stream (routes.ts's JUKEBOX_STREAM_ID, "MusicAndAlerts"
@@ -286,6 +288,30 @@ function buildZoneRow(zone) {
     await zonePost(zone.id, "mute", { muted: nextMuted });
   });
 
+  // Only ever shown/enabled for a zone that's currently offline
+  // (updateZoneRow's "hidden" toggle) -- routes.ts's own 409 is the real
+  // guard, this is just to not offer the button for a live zone at all.
+  // Removes the row immediately on success rather than waiting for the
+  // next Snapcast push, since a deleted client produces no further
+  // notification about itself to wait for.
+  deleteBtn.addEventListener("click", async () => {
+    const entry = zoneRows.get(zone.id);
+    if (
+      !confirm(
+        `Forget "${entry.nameText.textContent}"? This can't be undone -- it'll come back on its own if it ever reconnects.`,
+      )
+    ) {
+      return;
+    }
+    try {
+      await zonePost(zone.id, "delete", {});
+      entry.row.remove();
+      zoneRows.delete(zone.id);
+    } catch (err) {
+      alert(`Couldn't delete this zone: ${err.message}`);
+    }
+  });
+
   return {
     row,
     nameDot,
@@ -295,6 +321,7 @@ function buildZoneRow(zone) {
     volumeInput,
     volumeValue,
     muteBtn,
+    deleteBtn,
     lastMuted: false,
     lastActiveSource: undefined,
   };
@@ -323,6 +350,7 @@ function updateZoneRow(entry, zone) {
   entry.lastMuted = zone.muted;
   entry.muteBtn.textContent = zone.muted ? "Unmute" : "Mute";
   entry.muteBtn.classList.toggle("muted", zone.muted);
+  entry.deleteBtn.classList.toggle("hidden", zone.connected);
 }
 
 // zone.id/name/connected/volume/muted are exactly Snapcast's own

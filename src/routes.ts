@@ -169,6 +169,39 @@ export function registerRoutes({
       });
   });
 
+  // Forgets a zone that's been decommissioned (SPEC.md §12) -- e.g. a
+  // Snapclient that's been physically removed and is never reconnecting,
+  // so it doesn't sit in the webapp forever showing "offline". Only
+  // allowed while the zone is actually disconnected: deleting a live one
+  // would just have it reappear on its next Client.OnConnect anyway (and
+  // silently dropping/re-adding a zone someone's actively listening on
+  // isn't something this should do without them noticing first).
+  router.post("/api/zones/:id/delete", (rawReq, res) => {
+    const req = rawReq as ExpressLikeRequest;
+    const zone = store.getZone(req.params.id);
+    if (!zone) {
+      res.status(404).json({ error: "unknown zone" });
+      return;
+    }
+    if (zone.connected) {
+      res.status(409).json({ error: "zone is still connected" });
+      return;
+    }
+    if (!snapserver.client) {
+      res.status(503).json({ error: "container not ready yet" });
+      return;
+    }
+    snapserver.client
+      .deleteClient(zone.id)
+      .then(() => {
+        store.removeZone(zone.id);
+        res.json({ ok: true });
+      })
+      .catch((err: unknown) => {
+        res.status(502).json({ error: String(err) });
+      });
+  });
+
   // GET /api/update/check and POST /api/update/apply are registered
   // separately via ManagedContainer.registerUpdateRoutes() (see index.ts).
   // /api/versions is NOT part of that helper -- it only covers the single

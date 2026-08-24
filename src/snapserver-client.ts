@@ -245,4 +245,15 @@ export class SnapserverClient {
   removeStream(streamId: string): Promise<void> {
     return this.call("Stream.RemoveStream", { id: streamId });
   }
+
+  /** Forgets a client (and its group, if it was the group's only member)
+   * from Snapserver's own persisted `server.json` (SPEC.md §12) -- for a
+   * zone that's been decommissioned and is never coming back, so it stops
+   * showing up as permanently "offline" in the webapp. A currently
+   * connected client re-appears on its next `Client.OnConnect` regardless
+   * (routes.ts guards against deleting one that's still connected, so
+   * this is only ever called for one that isn't). */
+  deleteClient(clientId: string): Promise<void> {
+    return this.call("Server.DeleteClient", { id: clientId });
+  }
 }

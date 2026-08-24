@@ -163,6 +163,22 @@ export const openApiDocument = {
         },
       },
     },
+    "/api/zones/{id}/delete": {
+      post: {
+        tags: ["zones"],
+        summary: "Forget a decommissioned zone",
+        description:
+          "Removes a zone from Snapserver's own persisted client/group registration, so it stops permanently showing up as \"offline\" once it's known to never be coming back (e.g. a Snapclient that's been physically removed). Only allowed while the zone is disconnected -- a currently connected one just reappears on its next reconnect, so this rejects with 409 to avoid silently dropping one someone might still be listening on.",
+        parameters: [{ $ref: "#/components/parameters/ZoneId" }],
+        responses: {
+          "200": { $ref: "#/components/responses/Ok" },
+          "404": { $ref: "#/components/responses/Error" },
+          "409": { $ref: "#/components/responses/Error" },
+          "502": { $ref: "#/components/responses/Error" },
+          "503": { $ref: "#/components/responses/Error" },
+        },
+      },
+    },
     "/api/satellites": {
       get: {
         tags: ["satellites"],
