@@ -917,7 +917,7 @@ all-zone fallback, volume duck, §2):**
   reads), so the writer needs no knowledge of the sample rate. `"silence"`
   is a third value `routes.ts`'s `/source` endpoint accepts, alongside
   `"jukebox"`/`"alerts"`; the webapp's per-zone control is three exclusive
-  buttons (Jukebox/Alerts/Silence), not a two-way toggle, mirroring the
+  buttons (Output/Alerts/Silence), not a two-way toggle, mirroring the
   three real states a zone can be manually put in.
 - **Combined Mopidy+Snapserver image over two containers** — one
   `ManagedContainer` instance, one lifecycle, no inter-container network

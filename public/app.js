@@ -172,7 +172,7 @@ function buildZoneRow(zone) {
     </div>
     <div class="zone-controls">
       <div class="source-buttons">
-        <button class="source-btn jukebox" data-source="jukebox">Jukebox</button>
+        <button class="source-btn jukebox" data-source="jukebox">Output</button>
         <button class="source-btn alerts" data-source="alerts">Alerts</button>
         <button class="source-btn silence" data-source="silence">Silence</button>
       </div>
@@ -245,7 +245,7 @@ function updateZoneRow(entry, zone) {
   entry.nameText.textContent = zone.name || zone.id;
   entry.sourceBadge.textContent =
     zone.activeSource === "jukebox"
-      ? "Jukebox"
+      ? "Output"
       : zone.activeSource === "alerts"
         ? "Alerts"
         : zone.activeSource === "silence"
