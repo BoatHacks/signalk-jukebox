@@ -74,6 +74,10 @@ export class MopidyClient {
     return this.call("core.mixer.get_mute");
   }
 
+  setMute(muted: boolean): Promise<boolean> {
+    return this.call("core.mixer.set_mute", { mute: muted });
+  }
+
   getCurrentTrack(): Promise<MopidyTrack | null> {
     return this.call("core.playback.get_current_track");
   }

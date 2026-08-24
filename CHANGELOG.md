@@ -8,6 +8,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- The N2K/Fusion-Link interface (`n2k.enabled`) is now implemented, not
+  just scaffolded — against `@canboat/ts-pgns`'s real PGN classes,
+  confirmed against `sbender9/signalk-fusion-stereo`'s own published
+  source for the exact `app.emit`/`app.on` wiring convention. Broadcasts
+  now-playing/volume/zone status as Fusion PGN 130820 messages on every
+  state change, on a periodic refresh, and immediately in response to a
+  device's own status request; accepts incoming PGN 126720 transport/
+  volume/mute commands from an MFD and applies them through the exact
+  same write path a REST/webapp command would take. If an N2K-zoned zone
+  is on AirPlay, its real track (or a placeholder, before metadata
+  arrives) is broadcast instead of Mopidy's — with a deterministic
+  lowest-`n2kZone`-wins tie-break if more than one is simultaneously.
+  Standard/generic Entertainment PGNs (the spec's secondary surface)
+  remain an intentional stub. A zone's `n2kZone` slot assignment is now
+  actually claimed (previously dead code, never called) and persisted to
+  disk, so it survives a restart regardless of whether N2K is enabled.
+
 - `.github/workflows/publish.yml`'s `build-images` job: rebuilds and
   pushes both `ghcr.io/boathacks/signalk-jukebox` and
   `ghcr.io/boathacks/signalk-jukebox-snapclient` (multi-arch,

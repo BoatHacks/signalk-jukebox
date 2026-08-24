@@ -283,30 +283,62 @@ other directly) when a command arrives on its interface.
   Whether MFDs respond usefully to broadcasts from a non-self-identified
   source is unverified against real hardware — SPEC.md §13 carries this
   forward as an open risk, not a resolved detail.
-- **Outbound:** on every canonical-store change event, encodes the
-  relevant Fusion-Link message (and, best-effort, the standard
-  Entertainment PGN equivalent) and sends it via
-  `app.emit('nmea2000out', pgnString)`, per SignalK's standard
-  N2K-output convention. Also re-broadcasts current state on a periodic
-  interval so a device joining the bus mid-session gets it without
-  waiting for the next change (SPEC.md §6.3). **Now-playing source
-  selection** (device-wide field, SPEC.md §6.3, §12): Mopidy's track,
-  unless an N2K-zoned zone's `activeSource` is `airplay`, in which case
-  that zone's `Zone.airplay.track` if present (else the "AirPlay Active"
-  placeholder) — and if more than one N2K-zoned zone is on AirPlay
-  simultaneously, the lowest `n2kZone` number's track wins.
-- **Inbound:** subscribes to incoming N2K PGNs via SignalK's PGN-in hook,
-  decodes Fusion-Link commands (transport, master volume, per-zone
-  volume/mute), and writes them into the canonical store the same way any
-  other adapter's incoming command would be applied (§2.1) — the store
-  doesn't know or care that the write came from the N2K bus rather than
-  REST.
-- **Zone mapping:** reads/writes `ZoneAssignment` (§2.1) to translate
-  between Snapclient ids (used everywhere else) and the small integer
-  zone numbers (0–3) Fusion-Link/Entertainment PGNs actually carry.
-- Entirely optional — when `n2k.enabled` is `false` (SPEC.md §9), this
-  adapter does not run; every other component is unaffected (the store
-  and its other adapters have no dependency on N2K being present).
+- **Implemented** (`n2k/fusion.ts`, `n2k/apply-command.ts`, `n2k/zone-mapping.ts`,
+  `state/zone-assignments-file.ts`; wired into `index.ts`) against
+  `@canboat/ts-pgns` v1.11.18's real, shipped PGN classes — Fusion-Link
+  only; the generic/standard Entertainment PGN secondary surface
+  (`n2k/entertainment-pgn.ts`) is still an intentional stub, deferred
+  until there's a real device to confirm it's worth maintaining (SPEC.md
+  §13). Confirmed by typecheck + a real unit test suite (not real
+  hardware — SPEC.md §13's bus-identity risk remains genuinely
+  unverified).
+- **Outbound:** on every canonical-store change event, `FusionAdapter.
+  broadcastState()` constructs the relevant `@canboat/ts-pgns` PGN 130820
+  status objects and sends each via `app.emit('nmea2000JsonOut',
+  pgnInstance)` — confirmed against `sbender9/signalk-fusion-stereo`'s
+  own real source (not the flat-string `app.emit('nmea2000out',
+  pgnString)` convention this doc originally assumed) that a modern
+  SignalK server (`app.config.version` ≥ 2.15.0) accepts the constructed
+  PGN object directly, no Actisense-string encoding step needed. Also
+  re-broadcasts current state on a periodic interval
+  (`FUSION_REFRESH_INTERVAL_MS`, `fusion.ts`) and immediately on a
+  decoded `requestStatus` command, so a device joining the bus
+  mid-session gets current state without waiting for the next actual
+  change (SPEC.md §6.3). **Now-playing source selection** (device-wide
+  field, SPEC.md §6.3, §12): Mopidy's track, unless an N2K-zoned zone's
+  `activeSource` is `airplay`, in which case that zone's `Zone.airplay.
+  track` if present (else the "AirPlay Active" placeholder) — and if
+  more than one N2K-zoned zone is on AirPlay simultaneously, the lowest
+  `n2kZone` number's track wins.
+- **Inbound:** `app.on('N2KAnalyzerOut', ...)` receives every PGN on the
+  bus, already decoded into a `@canboat/ts-pgns`-shaped object (no raw
+  byte parsing needed) — `FusionAdapter.decodeIncoming()` matches it
+  against the known PGN 126720 Fusion command sub-messages via each
+  class's own static `isMatch()`, and `apply-command.ts`'s
+  `applyFusionCommand()` dispatches the result through the *exact* same
+  methods the REST/webapp write paths already use (`MopidyClient.play()/
+  pause()/next()/previous()/setMute()`, `SnapserverClient.
+  setClientVolume()` + `store.setZone()`) — an MFD is not a
+  second-class caller (SPEC.md §6.3). `FusionSetSource`/`FusionSetPower`
+  decode to no actionable command (single-virtual-source model, no
+  "power" concept of this plugin's own).
+- **Zone mapping:** `n2k/zone-mapping.ts`'s `claimN2kZone()`, called from
+  `zone-sync.ts`'s own tick the first time a Snapclient id is ever seen
+  (not gated behind `n2k.enabled` — SPEC.md §2's own "the first zone a
+  Snapclient is ever seen at is assigned" applies regardless, so a zone
+  already has a stable number if N2K gets enabled later), reads/writes
+  `ZoneAssignment` (§2.1) to translate between Snapclient ids (used
+  everywhere else) and the small integer zone numbers (0–3,
+  `N2K_ZONE_CAP`) Fusion-Link actually carries. Persisted via
+  `state/zone-assignments-file.ts` (atomic write-then-rename JSON,
+  `app.getDataDirPath()`) — loaded once at `index.ts` startup, before
+  zone-sync's first tick runs, and saved again every time a zone claims
+  a genuinely new slot.
+- Entirely optional — when `n2k.enabled` is `false` (SPEC.md §9), the
+  Fusion adapter itself does not run (no broadcast, no incoming-command
+  handling); every other component is unaffected (the store and its
+  other adapters have no dependency on N2K being present). Zone-number
+  claiming/persistence above happens regardless of this toggle.
 
 ### 2.4 Container image (`signalk-jukebox` image, built by this repo)
 

@@ -42,6 +42,12 @@ import {
   type PluginSettings,
 } from "./types.js";
 import { openApiDocument } from "./openapi.js";
+import { FusionAdapter, FUSION_REFRESH_INTERVAL_MS, type FusionAppLike } from "./n2k/fusion.js";
+import { applyFusionCommand } from "./n2k/apply-command.js";
+import {
+  loadZoneAssignments,
+  saveZoneAssignments,
+} from "./state/zone-assignments-file.js";
 
 // Plugin entry point, following the ManagedContainer archetype
 // (signalk-container-helper README "Quick start: a managed container").
@@ -50,7 +56,11 @@ import { openApiDocument } from "./openapi.js";
 // container.ts, mopidy-client.ts, snapserver-client.ts, n2k/*, airplay/*.
 
 interface App
-  extends AppLike, ControlsAppLike, PutHandlerAppLike, SatellitesAppLike {
+  extends AppLike,
+    ControlsAppLike,
+    PutHandlerAppLike,
+    SatellitesAppLike,
+    FusionAppLike {
   debug(msg: string): void;
   error(msg: string): void;
   getDataDirPath(): string;
@@ -70,6 +80,10 @@ export default function plugin(app: App) {
   let stopZonePutHandlers: (() => void) | null = null;
   let stopLocalSnapclientRename: (() => void) | null = null;
   let stopPlaybackSync: (() => void) | null = null;
+  let fusionAdapter: FusionAdapter | null = null;
+  let stopFusionBroadcast: (() => void) | null = null;
+  let fusionRefreshTimer: NodeJS.Timeout | null = null;
+  let stopFusionIncoming: (() => void) | null = null;
   // Filled in once container.start() resolves an address (registerWithRouter
   // runs synchronously before that) -- see proxy.ts.
   const proxyState: MopidyProxyState = { address: null };
@@ -173,7 +187,40 @@ export default function plugin(app: App) {
           port: SNAPCAST_CONTROL_PORT,
         });
         snapserverState.client = snapserverClient;
-        stopZoneSync = startZoneSync(store, snapserverClient);
+
+        // Restore each zone's permanent n2kZone slot (SPEC.md §2, §8)
+        // before zone-sync's first tick runs, so a zone seen again after
+        // a restart gets its existing slot back rather than looking
+        // "new" and claiming another one. A read failure here (anything
+        // but "nothing persisted yet") isn't fatal -- every zone just
+        // re-claims a slot as if seen for the first time, same as a
+        // corrupt file would already fall back to inside
+        // loadZoneAssignments itself.
+        try {
+          const persistedAssignments = await loadZoneAssignments(
+            app.getDataDirPath(),
+          );
+          store.restoreZoneAssignments(persistedAssignments);
+        } catch (err) {
+          app.error(
+            `signalk-jukebox: could not load persisted zone assignments: ${String(err)}`,
+          );
+        }
+
+        stopZoneSync = startZoneSync(store, snapserverClient, undefined, () => {
+          // Fire-and-forget: a save failure is logged, not fatal -- the
+          // in-memory claim (store.setZoneAssignment, already applied
+          // before this callback runs) still holds for the rest of this
+          // session either way, it just wouldn't survive a restart.
+          void saveZoneAssignments(
+            app.getDataDirPath(),
+            store.getPersistedZoneAssignments(),
+          ).catch((err: unknown) => {
+            app.error(
+              `signalk-jukebox: could not persist zone assignment: ${String(err)}`,
+            );
+          });
+        });
         // One-time: move any zone still on an earlier name for "the
         // jukebox" (this stream has been renamed more than once --
         // zone-sync.ts's own LEGACY_JUKEBOX_STREAM_IDS comment) onto the
@@ -209,9 +256,64 @@ export default function plugin(app: App) {
           stopPlaybackSync = startPlaybackSync(store, mopidyState.client);
         }
 
-        // TODO(implementation): if settings.n2k.enabled, construct
-        // FusionAdapter/EntertainmentPgnAdapter (n2k/fusion.ts,
-        // n2k/entertainment-pgn.ts) and subscribe them to store changes.
+        // entertainment-pgn.ts (the generic/standard NMEA2000 Entertainment
+        // PGN set, SPEC.md §6.3's secondary surface) stays unwired for now
+        // -- its own file header notes real-world chartplotter coverage is
+        // unverified, possibly not worth maintaining at all; Fusion-Link
+        // below is the primary, better-evidenced surface.
+        if (settings.n2k.enabled) {
+          const adapter = new FusionAdapter({
+            deviceName: settings.n2k.deviceName,
+            app,
+          });
+          fusionAdapter = adapter;
+
+          const broadcast = () => {
+            adapter.broadcastState(store.getPlayback(), store.getZones());
+          };
+
+          // On every canonical-state change (SPEC.md §6.3's primary
+          // trigger)...
+          store.onChange(broadcast);
+          stopFusionBroadcast = () => store.offChange(broadcast);
+
+          // ...plus a periodic refresh regardless, so a device joining the
+          // bus mid-session still gets current state without waiting for
+          // an actual change (fusion.ts's own FUSION_REFRESH_INTERVAL_MS
+          // doc comment).
+          fusionRefreshTimer = setInterval(broadcast, FUSION_REFRESH_INTERVAL_MS);
+
+          // ...plus immediately in response to a real MFD explicitly
+          // asking for one (PGN_126720_FusionRequestStatus, decoded below
+          // to "requestStatus") -- more responsive than waiting out the
+          // periodic refresh for that specific, common case.
+          const incomingListener = (pgn: unknown) => {
+            for (const command of adapter.decodeIncoming(pgn)) {
+              void applyFusionCommand(command, {
+                mopidy: mopidyState.client,
+                snapserver: snapserverState.client,
+                store,
+                onError: (msg) => app.error(msg),
+                onRequestStatus: broadcast,
+              });
+            }
+          };
+          app.on?.("N2KAnalyzerOut", incomingListener);
+          stopFusionIncoming = () =>
+            app.off?.("N2KAnalyzerOut", incomingListener);
+
+          // No real ISO Address Claim happens (SPEC.md §6.3, §13's own
+          // bus-identity caveat -- broadcasts ride SignalK's own already-
+          // claimed address, not a distinct one this plugin negotiates for
+          // itself), so "claimed" here means "the Fusion interface is
+          // active and broadcasting," not a literal NMEA2000 address
+          // claim negotiation. That negotiation not happening at all is
+          // exactly the accepted, documented scope decision -- this is
+          // just the state's honest label for the resulting condition.
+          store.setN2kDeviceState("claimed");
+
+          broadcast(); // don't wait for the first change/timer tick
+        }
         // TODO(implementation): if settings.airplay.enabled, provision the
         // AirPlay slot pool (airplay/pool.ts) against the running
         // Snapserver.
@@ -246,6 +348,14 @@ export default function plugin(app: App) {
       stopZonePutHandlers = null;
       stopLocalSnapclientRename?.();
       stopLocalSnapclientRename = null;
+      stopFusionBroadcast?.();
+      stopFusionBroadcast = null;
+      stopFusionIncoming?.();
+      stopFusionIncoming = null;
+      if (fusionRefreshTimer) clearInterval(fusionRefreshTimer);
+      fusionRefreshTimer = null;
+      fusionAdapter = null;
+      store.setN2kDeviceState("unclaimed");
       snapserverState.client = null;
       mopidyState.client = null;
       proxyState.address = null;

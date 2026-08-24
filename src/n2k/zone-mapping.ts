@@ -7,6 +7,11 @@ import type { ZoneAssignment } from "../types.js";
 // n2kZone is the only caller now, capped at 4 by the Fusion-Link protocol
 // itself (confirmed, SPEC.md §13), not by anything Snapcast-related.
 
+/** Fusion-Link's own hard zone cap (SPEC.md §6.3, §13, confirmed via
+ * @canboat/ts-pgns's own fusionVolumes zone1-zone4 field layout) -- not a
+ * number this plugin gets to choose. */
+export const N2K_ZONE_CAP = 4;
+
 /**
  * Returns the lowest n2kZone number in [0, cap) not already claimed by
  * any other zone's assignment, or undefined if the range is full

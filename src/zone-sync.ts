@@ -1,5 +1,6 @@
 import type { StateStore } from "./state/store.js";
 import type { SnapserverClient } from "./snapserver-client.js";
+import { claimN2kZone, N2K_ZONE_CAP } from "./n2k/zone-mapping.js";
 
 // Keeps the canonical store's zones in sync with Snapserver's actual state
 // (ARCHITECTURE.md §2.2) -- polling rather than a push/event subscription
@@ -67,6 +68,13 @@ export function startZoneSync(
   store: StateStore,
   snapserver: SnapserverClient,
   intervalMs = DEFAULT_INTERVAL_MS,
+  // Called once, synchronously, right after a zone is ever claimed a new
+  // n2kZone slot (SPEC.md §2, §8: "assigned... once, forever" -- must
+  // survive restarts) -- lets index.ts persist StateStore's zoneAssignments
+  // to disk without this file needing any filesystem access of its own.
+  // Omittable so existing callers/tests that don't care about N2K don't
+  // need to pass a no-op.
+  onZoneAssignmentClaimed?: () => void,
 ): () => void {
   let stopped = false;
   let timer: NodeJS.Timeout | undefined;
@@ -79,6 +87,25 @@ export function startZoneSync(
         for (const client of group.clients) {
           seen.add(client.id);
           const existing = store.getZone(client.id);
+
+          // Zone -> n2kZone is a one-time, permanent claim (SPEC.md §2)
+          // read from the PERSISTED assignment map, not the in-memory
+          // zone record above -- that record starts empty every restart,
+          // while zoneAssignments is what index.ts restores from disk
+          // before zone-sync ever starts (state/zone-assignments-file.ts).
+          // A zone that already has one just gets it back unchanged
+          // (claimN2kZone is idempotent); a genuinely new one claims the
+          // next free slot, if the 4-zone cap isn't already full.
+          let n2kZone = store.getZoneAssignment(client.id)?.n2kZone;
+          if (n2kZone === undefined) {
+            const assignments = store.getPersistedZoneAssignments();
+            n2kZone = claimN2kZone(assignments, client.id, N2K_ZONE_CAP);
+            if (n2kZone !== undefined) {
+              store.setZoneAssignment(client.id, { n2kZone });
+              onZoneAssignmentClaimed?.();
+            }
+          }
+
           store.setZone({
             id: client.id,
             groupId: group.id,
@@ -94,7 +121,7 @@ export function startZoneSync(
                   : group.streamId === SILENCE_STREAM_ID
                     ? "silence"
                     : "airplay",
-            n2kZone: existing?.n2kZone,
+            n2kZone,
             airplay: existing?.airplay,
           });
         }
