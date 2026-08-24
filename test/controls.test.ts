@@ -103,21 +103,38 @@ describe("registerPlaybackControls", () => {
 });
 
 describe("registerControlsMeta", () => {
-  it("publishes meta (no value) for all four control paths", () => {
+  it("publishes both meta and an initial value (0, released) for all four control paths", () => {
     const handleMessage = vi.fn();
     registerControlsMeta({ handleMessage }, "signalk-jukebox");
 
     expect(handleMessage).toHaveBeenCalledTimes(1);
     const [pluginId, delta] = handleMessage.mock.calls[0] as [
       string,
-      { updates: { meta: { path: string; value: unknown }[] }[] },
+      {
+        updates: {
+          meta: { path: string; value: unknown }[];
+          values: { path: string; value: unknown }[];
+        }[];
+      },
     ];
     expect(pluginId).toBe("signalk-jukebox");
+
     const meta = delta.updates[0]!.meta;
-    const paths = meta.map((m) => m.path).sort();
-    expect(paths).toEqual(Object.values(PLAYBACK_CONTROL_PATHS).sort());
+    const metaPaths = meta.map((m) => m.path).sort();
+    expect(metaPaths).toEqual(Object.values(PLAYBACK_CONTROL_PATHS).sort());
     for (const entry of meta) {
       expect(entry.value).toHaveProperty("description");
+    }
+
+    // Meta alone isn't enough for a path to show up anywhere in
+    // /signalk/v1/api/...'s tree (confirmed live against a real running
+    // server) -- a real value has to ship too, or the earlier "impossible
+    // to find" report this function exists to fix stays unfixed.
+    const values = delta.updates[0]!.values;
+    const valuePaths = values.map((v) => v.path).sort();
+    expect(valuePaths).toEqual(Object.values(PLAYBACK_CONTROL_PATHS).sort());
+    for (const entry of values) {
+      expect(entry.value).toBe(0);
     }
   });
 });

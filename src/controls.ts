@@ -61,26 +61,37 @@ const CONTROL_DESCRIPTIONS: Record<PlaybackControlAction, string> = {
 };
 
 /**
- * Publishes metadata (no value) for the four controls.* paths so they
+ * Publishes metadata AND an initial value (0 -- "released", the resting
+ * state of a momentary control) for the four controls.* paths, so they
  * show up in the Data Browser / any path picker immediately, rather than
- * only existing once some external source actually sends the first
- * delta -- confirmed by a real user report that these paths were
- * otherwise impossible to find: this plugin only ever *subscribes* to
- * them (registerPlaybackControls above), and a path with no value and no
- * meta is invisible to SignalK's data model entirely.
+ * only existing once some external source actually sends the first real
+ * press -- this plugin only ever *subscribes* to them
+ * (registerPlaybackControls above), it never presses them itself.
+ *
+ * A real user report that these paths were impossible to find led to an
+ * earlier meta-only version of this function; confirmed live against a
+ * real running server that meta-only was NOT enough -- a path with meta
+ * but no value never appears anywhere in the `/signalk/v1/api/...` tree
+ * at all (only reachable via its own dedicated `/meta` sub-route), even
+ * though every other path in this plugin that DOES have a real value
+ * shows up in that same tree fine. Publishing a value up front is what
+ * actually fixes the "impossible to find" report meta-only was meant to.
  */
 export function registerControlsMeta(
   app: ControlsMetaAppLike,
   pluginId: string,
 ): void {
+  const actions = Object.keys(PLAYBACK_CONTROL_PATHS) as PlaybackControlAction[];
   app.handleMessage(pluginId, {
     updates: [
       {
-        meta: (
-          Object.keys(PLAYBACK_CONTROL_PATHS) as PlaybackControlAction[]
-        ).map((action) => ({
+        meta: actions.map((action) => ({
           path: PLAYBACK_CONTROL_PATHS[action],
           value: { description: CONTROL_DESCRIPTIONS[action] },
+        })),
+        values: actions.map((action) => ({
+          path: PLAYBACK_CONTROL_PATHS[action],
+          value: 0,
         })),
       },
     ],

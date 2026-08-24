@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- `entertainment.jukebox.playback.controls.*` (play/pause/next/previous)
+  now actually appear in the SignalK data tree. The earlier fix for this
+  (publishing meta with no value) turned out not to be enough — confirmed
+  live against a real running server that a path with meta but no value
+  never shows up anywhere in `/signalk/v1/api/...`'s tree at all, only
+  via its own dedicated `/meta` sub-route. Now publishes an initial value
+  (`0`, released) alongside the meta.
+
 ### Added
 
 - The N2K/Fusion-Link interface (`n2k.enabled`) is now implemented, not
