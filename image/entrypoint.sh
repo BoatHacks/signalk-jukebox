@@ -20,6 +20,18 @@ set -e
 # real container recreate, not just a plain restart of the same container.
 mkdir -p /data /data/snapserver /cache /app/sandbox /var/run/dbus
 
+# /run (and so /var/run/dbus) is part of this container's writable layer,
+# not a tmpfs reset on every start -- a `podman start` (as opposed to a
+# fresh `podman run`) reuses it as-is. An ungraceful stop (OOM, SIGKILL,
+# host reboot) leaves dbus-daemon's own pidfile behind with no process to
+# match it; the next boot's `dbus-daemon --system --fork` then refuses to
+# start at all ("pid file ... exists"), taking the whole entrypoint down
+# with it under `set -e`. Confirmed on halpi2's sk-jukebox container after
+# exactly this kind of restart. Harmless to remove unconditionally: a
+# fresh container has no such file, and dbus-daemon recreates it itself on
+# a successful start.
+rm -f /run/dbus/pid
+
 # shairport-sync hard-requires a working Avahi client to advertise itself
 # over mDNS -- confirmed by build-testing (SPEC.md §13): without this, it
 # refuses to start at all ("fatal error: Could not establish mDNS
