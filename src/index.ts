@@ -88,12 +88,39 @@ export default function plugin(app: App) {
   // Filled in once container.start() resolves an address (registerWithRouter
   // runs synchronously before that) -- see proxy.ts.
   const proxyState: MopidyProxyState = { address: null };
+  // registerWithRouter runs synchronously right after start() returns --
+  // well before the async startSafely body below reaches container's
+  // construction. Stashed here so that block can finish registration
+  // once container exists (see finishRouterRegistration below); calling
+  // container?.registerUpdateRoutes(...) directly from registerWithRouter
+  // used to silently no-op (container was always still null), and the
+  // proxy's catch-all went up right after it regardless -- confirmed
+  // live that /api/update/check fell through to the Mopidy proxy and
+  // returned its generic proxy error instead of ever reaching
+  // signalk-container-helper's update routes.
+  let pendingRouter: RouterLike | null = null;
   // Same pattern, for routes.ts's zone volume/mute/source writes.
   const snapserverState: SnapserverClientState = { client: null };
   // Same pattern again, for put-handlers.ts's playback.volume PUT --
   // registerPlaybackVolumePutHandler runs synchronously in start(), well
   // before container.start() resolves a real MopidyClient to call.
   const mopidyState: MopidyClientState = { client: null };
+
+  // Registers the two container-dependent pieces on `router`, in the
+  // order they must land in: registerUpdateRoutes's specific routes
+  // first, then registerMopidyProxy's catch-all last (proxy.ts's own
+  // doc comment -- Express matches routes in registration order, so
+  // anything added after a no-path `.use()` catch-all is unreachable).
+  // Only callable once `container` actually exists.
+  function finishRouterRegistration(router: RouterLike) {
+    container?.registerUpdateRoutes(router, {
+      onApplied: (requestedTag) => {
+        settings.imageTag = requestedTag;
+        app.savePluginOptions(settings, () => undefined);
+      },
+    });
+    registerMopidyProxy(router, proxyState);
+  }
 
   const jukebox = {
     id: "signalk-jukebox",
@@ -172,6 +199,10 @@ export default function plugin(app: App) {
           libraryMount,
           dataMount,
         });
+        if (pendingRouter) {
+          finishRouterRegistration(pendingRouter);
+          pendingRouter = null;
+        }
         const { address: resolvedAddress } = await container.start(
           settings.imageTag,
         );
@@ -382,16 +413,13 @@ export default function plugin(app: App) {
         app,
       });
 
-      container?.registerUpdateRoutes(router, {
-        onApplied: (requestedTag) => {
-          settings.imageTag = requestedTag;
-          app.savePluginOptions(settings, () => undefined);
-        },
-      });
-
-      // Catch-all -- must be registered last, after every specific route
-      // above (proxy.ts).
-      registerMopidyProxy(router, proxyState);
+      if (container) {
+        // Rare: only true if start() already finished constructing
+        // container before SignalK (re)mounted this router.
+        finishRouterRegistration(router);
+      } else {
+        pendingRouter = router;
+      }
     },
 
     // Standard SignalK plugin hook (@signalk/server-api's Plugin
