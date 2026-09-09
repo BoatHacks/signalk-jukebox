@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-09-09
+
+### Fixed
+
+- `GET /api/update/check` and `POST /api/update/apply` now actually
+  reach signalk-container-helper's update routes instead of falling
+  through to the Mopidy proxy's catch-all. `registerWithRouter` ran
+  synchronously right after `start()` returned, before the container
+  instance existed, so registration silently no-op'd every time.
+
 ## [0.1.2] - 2026-09-09
 
 ### Fixed
