@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-09-09
+
+### Fixed
+
+- The container no longer crash-loops on restart after an ungraceful stop
+  (OOM, SIGKILL, host reboot). `/run` is part of the container's writable
+  layer, not a tmpfs reset per boot, so a leftover `dbus-daemon` pidfile
+  from the previous run blocked every subsequent start under `set -e`.
+  `image/entrypoint.sh` now clears it before starting dbus.
+
 ## [0.1.1] - 2026-08-24
 
 ### Fixed
