@@ -1,14 +1,13 @@
-#!/bin/sh
+#!/bin/bash
 # Container entrypoint (ARCHITECTURE.md §2.4, §7). Renders both config
 # templates, wires up the Mopidy->Snapserver audio pipe and the AirPlay
-# sandbox dir, then runs both processes.
+# sandbox dir, then runs both processes under real supervision (see the
+# bottom of this file).
 #
-# TODO(verify): the two-process supervision below (background Snapserver,
-# foreground Mopidy, trap-based cleanup) is a minimal first draft, not a
-# real process supervisor -- signal handling for a PID-1 process with two
-# children is easy to get subtly wrong. Consider replacing with a proper
-# supervisor (s6, dumb-init + a small wrapper, or similar) before relying
-# on clean shutdown/restart behavior in production.
+# bash, not sh: `wait -n` below is a bashism (Debian's dash has no
+# equivalent) and is the only portable-enough way to block on "whichever
+# of these background jobs exits first" without a real init/supervisor
+# dependency.
 
 set -e
 
@@ -71,6 +70,29 @@ envsubst < /app/snapserver.conf.template > /etc/snapserver.conf
 
 snapserver --config /etc/snapserver.conf &
 SNAPSERVER_PID=$!
-trap 'kill "$SNAPSERVER_PID" "$SILENCE_PID" 2>/dev/null || true' TERM INT EXIT
 
-exec mopidy --config /data/mopidy.conf
+mopidy --config /data/mopidy.conf &
+MOPIDY_PID=$!
+
+# Real supervision, not `exec mopidy`: that used to replace this shell
+# as PID 1, so a killed Snapserver (confirmed live on halpi2,
+# 2026-09-11: repeated OOM kills, anon-rss ~450-470MB against this
+# container's 512m cap) became a permanent zombie nothing noticed or
+# restarted -- Mopidy alone kept the container looking "Up" and healthy
+# while audio distribution was silently dead. `wait -n` blocks for
+# whichever of the two exits first; either way this script then exits
+# too, taking the container down with it so podman's own `restart:
+# unless-stopped` policy (container.ts's buildConfig) recreates a clean
+# instance instead of the crash going undetected.
+trap 'kill "$SNAPSERVER_PID" "$MOPIDY_PID" "$SILENCE_PID" 2>/dev/null || true' TERM INT
+
+# `set -e` would otherwise abort this script right at `wait -n` the
+# instant either child exits nonzero (e.g. OOM-killed), skipping the
+# cleanup and explicit exit below -- suspend it just for this one call.
+set +e
+wait -n "$SNAPSERVER_PID" "$MOPIDY_PID"
+STATUS=$?
+set -e
+
+kill "$SNAPSERVER_PID" "$MOPIDY_PID" "$SILENCE_PID" 2>/dev/null || true
+exit "$STATUS"
