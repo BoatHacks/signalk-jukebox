@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-09-11
+
+### Fixed
+
+- The container no longer silently dies when Snapserver or Mopidy
+  crashes. `entrypoint.sh` used to `exec mopidy`, replacing itself as
+  PID 1, so a killed Snapserver became a permanent zombie nothing
+  noticed or restarted — Mopidy alone kept the container looking "Up"
+  while audio distribution was silently dead. Both processes are now
+  supervised: either one exiting takes the whole container down with
+  it, so podman's `restart: unless-stopped` policy recreates a clean
+  instance automatically.
+
 ## [0.1.3] - 2026-09-09
 
 ### Fixed
