@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-09-15
+
+### Added
+
+- `settings.wyomingBridges`: zero or more managed companion containers
+  (`wyoming-bridge.ts`), each bridging one
+  [Wyoming](https://github.com/rhasspy/wyoming) voice satellite's speaker
+  (e.g. an espos-p4-cockpit panel, which has no Snapcast client of its
+  own) into a normal jukebox zone via
+  [`ghcr.io/boathacks/signalk-jukebox-wyoming-bridge`](https://github.com/BoatHacks/signalk-jukebox-wyoming-bridge).
+  Unlike `localSnapclient` (always exactly one per plugin instance), this
+  is an array -- one entry per satellite target, each independently
+  named/enabled. Verified live end to end against a real Snapserver and a
+  real panel.
+- An entry removed from `wyomingBridges` (or left in the array but
+  disabled) now has its container actually stopped and removed on the
+  next start, instead of being left running unmanaged forever.
+
 ## [0.1.4] - 2026-09-11
 
 ### Fixed
