@@ -17,12 +17,20 @@ import {
 } from "./routes.js";
 import { registerMopidyProxy, type MopidyProxyState } from "./proxy.js";
 import { SnapserverClient } from "./snapserver-client.js";
-import { startZoneSync, migrateZonesToCurrentJukeboxStream } from "./zone-sync.js";
+import {
+  startZoneSync,
+  migrateZonesToCurrentJukeboxStream,
+} from "./zone-sync.js";
 import { startPlaybackSync } from "./playback-sync.js";
 import {
   createLocalSnapclient,
   renameLocalSnapclientZone,
 } from "./local-snapclient.js";
+import {
+  createWyomingBridge,
+  renameWyomingBridgeZone,
+  type WyomingBridgeHandle,
+} from "./wyoming-bridge.js";
 import { publishStateChanges, type AppLike } from "./paths.js";
 import { MopidyClient } from "./mopidy-client.js";
 import {
@@ -43,7 +51,11 @@ import {
   type PluginSettings,
 } from "./types.js";
 import { openApiDocument } from "./openapi.js";
-import { FusionAdapter, FUSION_REFRESH_INTERVAL_MS, type FusionAppLike } from "./n2k/fusion.js";
+import {
+  FusionAdapter,
+  FUSION_REFRESH_INTERVAL_MS,
+  type FusionAppLike,
+} from "./n2k/fusion.js";
 import { applyFusionCommand } from "./n2k/apply-command.js";
 import {
   loadZoneAssignments,
@@ -57,7 +69,8 @@ import {
 // container.ts, mopidy-client.ts, snapserver-client.ts, n2k/*, airplay/*.
 
 interface App
-  extends AppLike,
+  extends
+    AppLike,
     ControlsAppLike,
     PutHandlerAppLike,
     SatellitesAppLike,
@@ -73,6 +86,11 @@ interface App
 export default function plugin(app: App) {
   let container: ReturnType<typeof createManagedContainer> | null = null;
   let localSnapclient: ReturnType<typeof createLocalSnapclient> | null = null;
+  // Keyed by entry.id (settings.wyomingBridges[].id), not array index --
+  // an index would silently reassign an existing bridge's container to a
+  // different satellite target if entries are ever reordered on save.
+  const wyomingBridges = new Map<string, WyomingBridgeHandle>();
+  const stopWyomingBridgeRenames = new Map<string, () => void>();
   let settings: PluginSettings = SCHEMA_DEFAULTS;
   const store = new StateStore(createInitialState());
   let unpublish: (() => void) | null = null;
@@ -166,7 +184,11 @@ export default function plugin(app: App) {
         const { manager } = await waitForContainerManager();
 
         let libraryMount: { source: string; containerPath: string } | undefined;
-        if (manager && settings.backends.local.enabled && settings.libraryPath) {
+        if (
+          manager &&
+          settings.backends.local.enabled &&
+          settings.libraryPath
+        ) {
           const resolved = await resolveMount(manager, {
             containerPath: "/music",
             hostPath: settings.libraryPath,
@@ -268,7 +290,9 @@ export default function plugin(app: App) {
         // announcements under the current name. Fire-and-forget -- a
         // failure here doesn't block startup, and the next zone-sync tick
         // just keeps reporting whatever Snapcast actually has.
-        void migrateZonesToCurrentJukeboxStream(snapserverClient, (msg) => app.error(msg));
+        void migrateZonesToCurrentJukeboxStream(snapserverClient, (msg) =>
+          app.error(msg),
+        );
 
         // The local snapclient's zone starts out named after its raw
         // container hostname (Snapcast's own fallback when no name has
@@ -280,6 +304,17 @@ export default function plugin(app: App) {
           stopLocalSnapclientRename = renameLocalSnapclientZone(
             snapserverClient,
             settings.localSnapclient.zoneName,
+          );
+        }
+
+        // Same reasoning as the local snapclient rename above, once per
+        // enabled bridge entry -- each bridge's zone also starts out
+        // named after its raw container hostname until this fires.
+        for (const entry of settings.wyomingBridges) {
+          if (!entry.enabled) continue;
+          stopWyomingBridgeRenames.set(
+            entry.id,
+            renameWyomingBridgeZone(snapserverClient, entry.id, entry.zoneName),
           );
         }
 
@@ -321,7 +356,10 @@ export default function plugin(app: App) {
           // bus mid-session still gets current state without waiting for
           // an actual change (fusion.ts's own FUSION_REFRESH_INTERVAL_MS
           // doc comment).
-          fusionRefreshTimer = setInterval(broadcast, FUSION_REFRESH_INTERVAL_MS);
+          fusionRefreshTimer = setInterval(
+            broadcast,
+            FUSION_REFRESH_INTERVAL_MS,
+          );
 
           // ...plus immediately in response to a real MFD explicitly
           // asking for one (PGN_126720_FusionRequestStatus, decoded below
@@ -373,6 +411,13 @@ export default function plugin(app: App) {
         });
         startSafely(app, () => localSnapclient!.start());
       }
+
+      for (const entry of settings.wyomingBridges) {
+        if (!entry.enabled) continue;
+        const bridge = createWyomingBridge({ app, entry });
+        wyomingBridges.set(entry.id, bridge);
+        startSafely(app, () => bridge.start());
+      }
     },
 
     async stop() {
@@ -388,6 +433,8 @@ export default function plugin(app: App) {
       stopZonePutHandlers = null;
       stopLocalSnapclientRename?.();
       stopLocalSnapclientRename = null;
+      for (const stop of stopWyomingBridgeRenames.values()) stop();
+      stopWyomingBridgeRenames.clear();
       stopFusionBroadcast?.();
       stopFusionBroadcast = null;
       stopFusionIncoming?.();
@@ -402,6 +449,10 @@ export default function plugin(app: App) {
       await container?.stop(); // unregister updates + stop, never throws
       await localSnapclient?.stop();
       localSnapclient = null;
+      await Promise.all(
+        [...wyomingBridges.values()].map((bridge) => bridge.stop()),
+      );
+      wyomingBridges.clear();
       app.setPluginStatus("Stopped");
     },
 
@@ -565,6 +616,30 @@ export default function plugin(app: App) {
               title: "Zone name",
             },
             tag: { type: "string", default: "auto", title: "Image version" },
+          },
+        },
+        wyomingBridges: {
+          type: "array",
+          title:
+            "Wyoming satellite speaker bridges (bridges a satellite's speaker, e.g. an espos-p4-cockpit panel, into a jukebox zone)",
+          items: {
+            type: "object",
+            properties: {
+              id: {
+                type: "string",
+                title:
+                  "Stable id (Snapcast client id -- do not change once set)",
+              },
+              enabled: { type: "boolean", default: true, title: "Enabled" },
+              zoneName: { type: "string", title: "Zone name" },
+              satelliteHost: { type: "string", title: "Satellite host/IP" },
+              satellitePort: {
+                type: "number",
+                default: 10700,
+                title: "Satellite Wyoming port",
+              },
+              tag: { type: "string", default: "auto", title: "Image version" },
+            },
           },
         },
       },

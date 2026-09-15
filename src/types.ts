@@ -159,6 +159,24 @@ export interface PluginSettings {
      * container id), confirmed by build-testing. */
     zoneName: string;
   };
+  /** Zero or more managed companion containers (wyoming-bridge.ts), each
+   * bridging one Wyoming voice satellite's speaker into a jukebox zone --
+   * e.g. an espos-p4-cockpit panel's onboard speaker, which has no
+   * Snapcast client of its own. Unlike localSnapclient (always exactly
+   * one per plugin instance), this can be several -- an array, not a
+   * single object, for the same RJSF admin-UI rendering reason
+   * voiceDucking.satelliteZoneMap already is one (see that field's own
+   * comment). */
+  wyomingBridges: Array<{
+    /** Stable key: this entry's Snapcast client id AND container name
+     * suffix (wyoming-bridge.ts's WyomingBridgeEntryConfig). */
+    id: string;
+    enabled: boolean;
+    zoneName: string;
+    satelliteHost: string;
+    satellitePort: number;
+    tag: string;
+  }>;
 }
 
 /** Merge a saved/partial config over SCHEMA_DEFAULTS, one level into each
@@ -206,6 +224,9 @@ export function mergeSettings(
       ...SCHEMA_DEFAULTS.localSnapclient,
       ...rawConfig.localSnapclient,
     },
+    // An array, replaced wholesale on save -- same reasoning as
+    // voiceDucking.satelliteZoneMap above.
+    wyomingBridges: rawConfig.wyomingBridges ?? SCHEMA_DEFAULTS.wyomingBridges,
   };
 }
 
@@ -242,4 +263,5 @@ export const SCHEMA_DEFAULTS: PluginSettings = {
     tag: "auto",
     zoneName: "Local speakers",
   },
+  wyomingBridges: [],
 };
