@@ -3,6 +3,7 @@ import {
   buildWyomingBridgeConfig,
   renameWyomingBridgeZone,
   wyomingBridgeContainerName,
+  orphanedWyomingBridgeIds,
   WYOMING_BRIDGE_IMAGE,
   type RenameableSnapserverClient,
 } from "../src/wyoming-bridge.js";
@@ -61,6 +62,38 @@ describe("wyomingBridgeContainerName", () => {
     expect(wyomingBridgeContainerName("v-berth-panel")).toBe(
       "wyoming-bridge-v-berth-panel",
     );
+  });
+});
+
+describe("orphanedWyomingBridgeIds", () => {
+  it("flags an id whose entry was removed from settings entirely", () => {
+    const orphans = orphanedWyomingBridgeIds(
+      ["salon-panel", "v-berth-panel"], // previously known (persisted last start)
+      ["salon-panel"], // v-berth-panel's entry no longer exists
+    );
+    expect(orphans).toEqual(["v-berth-panel"]);
+  });
+
+  it("flags an id whose entry is still present but disabled", () => {
+    // enabledEntryIds is the caller's pre-filtered list (index.ts filters
+    // by entry.enabled before calling this) -- an id absent here because
+    // it's disabled looks identical to one absent because it was deleted,
+    // and should be treated the same way.
+    const orphans = orphanedWyomingBridgeIds(
+      ["salon-panel"],
+      [], // salon-panel's entry exists but enabled: false
+    );
+    expect(orphans).toEqual(["salon-panel"]);
+  });
+
+  it("leaves a still-wanted id alone", () => {
+    const orphans = orphanedWyomingBridgeIds(["salon-panel"], ["salon-panel"]);
+    expect(orphans).toEqual([]);
+  });
+
+  it("flags nothing the first time (no previously-known ids yet)", () => {
+    const orphans = orphanedWyomingBridgeIds([], ["salon-panel"]);
+    expect(orphans).toEqual([]);
   });
 });
 

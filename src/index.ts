@@ -29,8 +29,14 @@ import {
 import {
   createWyomingBridge,
   renameWyomingBridgeZone,
+  orphanedWyomingBridgeIds,
+  wyomingBridgeContainerName,
   type WyomingBridgeHandle,
 } from "./wyoming-bridge.js";
+import {
+  loadKnownWyomingBridgeIds,
+  saveKnownWyomingBridgeIds,
+} from "./state/wyoming-bridge-ids-file.js";
 import { publishStateChanges, type AppLike } from "./paths.js";
 import { MopidyClient } from "./mopidy-client.js";
 import {
@@ -411,6 +417,40 @@ export default function plugin(app: App) {
         });
         startSafely(app, () => localSnapclient!.start());
       }
+
+      // Own startSafely, not folded into the big one above: reaping
+      // orphaned containers is unrelated to (and must not block) actually
+      // starting the ones settings.wyomingBridges still wants -- confirmed
+      // live this was a real gap: an entry removed from settings and the
+      // plugin restarted left its old container running forever, nothing
+      // ever telling signalk-container to remove it. Diffs against
+      // state/wyoming-bridge-ids-file.ts's persisted id list, not
+      // ContainerManagerApi.listContainers() -- confirmed live that API
+      // does not report a container this plugin created in an earlier
+      // process lifetime at all (see that file's own doc comment).
+      const enabledWyomingBridgeIds = settings.wyomingBridges
+        .filter((e) => e.enabled)
+        .map((e) => e.id);
+      startSafely(app, async () => {
+        const { waitForContainerManager } =
+          await import("signalk-container-helper");
+        const { manager } = await waitForContainerManager();
+        const previouslyKnownIds = await loadKnownWyomingBridgeIds(
+          app.getDataDirPath(),
+        );
+        if (manager) {
+          for (const id of orphanedWyomingBridgeIds(
+            previouslyKnownIds,
+            enabledWyomingBridgeIds,
+          )) {
+            await manager.remove(wyomingBridgeContainerName(id));
+          }
+        }
+        await saveKnownWyomingBridgeIds(
+          app.getDataDirPath(),
+          enabledWyomingBridgeIds,
+        );
+      });
 
       for (const entry of settings.wyomingBridges) {
         if (!entry.enabled) continue;

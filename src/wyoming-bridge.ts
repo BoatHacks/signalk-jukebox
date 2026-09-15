@@ -18,13 +18,46 @@ import { SK_HOST_ALIAS } from "./local-snapclient.js";
 export const WYOMING_BRIDGE_IMAGE =
   "ghcr.io/boathacks/signalk-jukebox-wyoming-bridge";
 
+const WYOMING_BRIDGE_NAME_PREFIX = "wyoming-bridge-";
+
 /** Container name for one bridge entry. Distinct from its Snapcast client
  * id (which is `entry.id` verbatim, passed as BRIDGE_ID) -- kept as a
  * separate function so a future container-naming convention change
  * doesn't have to also mean a Snapcast client id change, even though they
  * happen to share the same source value today. */
 export function wyomingBridgeContainerName(id: string): string {
-  return `wyoming-bridge-${id}`;
+  return `${WYOMING_BRIDGE_NAME_PREFIX}${id}`;
+}
+
+/**
+ * Bridge entry ids this plugin previously created a container for (per
+ * state/wyoming-bridge-ids-file.ts) that are no longer wanted -- removed
+ * from settings.wyomingBridges entirely, or left in the array but
+ * disabled. Pure diff (no side effects), so it's unit-testable without a
+ * real container manager; index.ts converts each id to a container name
+ * (wyomingBridgeContainerName) and does the actual removal via
+ * ContainerManagerApi.remove().
+ *
+ * Confirmed live this needed fixing, not a theoretical gap: an entry
+ * removed from settings and the plugin restarted left its old container
+ * running forever, unmanaged -- unlike local-snapclient.ts, which never
+ * needs this (it's a single on/off toggle, not a collection, so there is
+ * never an "entry that used to exist").
+ *
+ * Diffs against a persisted id list, NOT ContainerManagerApi.listContainers()
+ * -- confirmed live against a real signalk-container that listContainers()
+ * does not report a container this plugin created in an EARLIER process
+ * lifetime at all (reflects the manager's own in-session bookkeeping, not
+ * a live host scan), while a direct manager.remove(name) by a name this
+ * plugin already knows works regardless. Tracking the id ourselves is the
+ * actual fix, not a workaround for a nicer API.
+ */
+export function orphanedWyomingBridgeIds(
+  previouslyKnownIds: string[],
+  enabledEntryIds: string[],
+): string[] {
+  const enabled = new Set(enabledEntryIds);
+  return previouslyKnownIds.filter((id) => !enabled.has(id));
 }
 
 export interface WyomingBridgeEntryConfig {
