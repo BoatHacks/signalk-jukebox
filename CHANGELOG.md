@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-09-16
+
+### Fixed
+
+- 0.1.6's `"files": ["dist"]` fix (trimming the npm tarball) accidentally
+  dropped `public/` -- the jukebox webapp bundle (`index.html`, `app.js`,
+  `remoteEntry.js`, chunk files) registered via the `signalk-webapp`
+  keyword. Confirmed live: a fresh `signalk-jukebox@0.1.6` install had
+  no `public/` directory at all, so the webapp 404'd, though the
+  separate admin config panel (served from `dist/configpanel/`) kept
+  working. `"files"` now lists both `dist` and `public`.
+
 ## [0.1.6] - 2026-09-16
 
 ### Fixed
