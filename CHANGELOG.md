@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-09-16
+
+### Fixed
+
+- `package.json` had no `"files"` field, so the npm tarball shipped the
+  entire `src/` and `test/` trees alongside `dist/` (177 files, 246KB)
+  -- it worked only because npm's gitignore-fallback packing happened to
+  include the gitignored `dist/` anyway, not because anything declared
+  it. Added `"files": ["dist"]` so only the built output ships (110
+  files, 96KB).
+
 ## [0.1.5] - 2026-09-15
 
 ### Added
