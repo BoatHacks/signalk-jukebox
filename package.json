@@ -47,6 +47,7 @@
     "node": ">=22"
   },
   "signalk": {
+    "displayName": "Jukebox",
     "requires": [
       "signalk-container"
     ]

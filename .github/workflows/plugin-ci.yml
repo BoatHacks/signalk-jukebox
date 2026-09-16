@@ -4,4 +4,4 @@ on:
   pull_request: { branches: ["**"] }
 jobs:
   plugin-ci:
-    uses: SignalK/signalk-server/.github/workflows/plugin-ci.yml@135e68ac9a13b6516b476234707a1513cac2a981 # v2.31.1
+    uses: SignalK/signalk-server/.github/workflows/plugin-ci.yml@0495a4a94acd69443d94498b3b431738c2ba4eff # v2.32.0
