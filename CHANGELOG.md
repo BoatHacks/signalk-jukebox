@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-09-16
+
+### Fixed
+
+- The Wyoming satellite bridges section never appeared in the admin UI.
+  `wyomingBridges` was added to `mergeSettings`/`SCHEMA_DEFAULTS`/the
+  `schema()` JSON export when the feature landed, but the actual UI is a
+  hand-written React panel (`configpanel/PluginConfigurationPanel.tsx`,
+  a Module Federation remote -- `schema()`'s JSON schema is an unused
+  fallback), and that panel was never given a section for it. Confirmed
+  live: the server correctly served `wyomingBridges` in both schema and
+  saved data, so the gap was purely in this component. Added a
+  "Wyoming satellite bridges" section mirroring the existing
+  voice-ducking satellite/zone list editor (add/edit/remove rows).
+
 ## [0.1.7] - 2026-09-16
 
 ### Fixed

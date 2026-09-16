@@ -85,7 +85,7 @@ export default function PluginConfigurationPanel({
   // backends.spotify.enabled when backends existed but backends.spotify
   // didn't.
   const merged = mergeSettings(cfg);
-  const { backends, n2k, airplay, vhf, voiceDucking, localSnapclient } = merged;
+  const { backends, n2k, airplay, vhf, voiceDucking, localSnapclient, wyomingBridges } = merged;
 
   const patch = (next: Partial<PluginSettings>) =>
     setCfg((prev) => ({ ...prev, ...next }));
@@ -573,6 +573,108 @@ export default function PluginConfigurationPanel({
             </FieldRow>
           </>
         )}
+      </CollapsibleSection>
+
+      <CollapsibleSection title="Wyoming satellite bridges (e.g. an espos-p4-cockpit panel's speaker)">
+        {wyomingBridges.map((bridge, i) => (
+          <div key={i} style={S.fieldRow}>
+            <input
+              style={S.inputSmall}
+              value={bridge.id}
+              onChange={(e) => {
+                const next = [...wyomingBridges];
+                next[i] = { ...bridge, id: e.target.value };
+                patch({ wyomingBridges: next });
+              }}
+              placeholder="stable id -- do not change once set"
+            />
+            <input
+              type="checkbox"
+              style={S.checkbox}
+              checked={bridge.enabled}
+              onChange={(e) => {
+                const next = [...wyomingBridges];
+                next[i] = { ...bridge, enabled: e.target.checked };
+                patch({ wyomingBridges: next });
+              }}
+            />
+            <input
+              style={S.inputSmall}
+              value={bridge.zoneName}
+              onChange={(e) => {
+                const next = [...wyomingBridges];
+                next[i] = { ...bridge, zoneName: e.target.value };
+                patch({ wyomingBridges: next });
+              }}
+              placeholder="zone name"
+            />
+            <input
+              style={S.inputSmall}
+              value={bridge.satelliteHost}
+              onChange={(e) => {
+                const next = [...wyomingBridges];
+                next[i] = { ...bridge, satelliteHost: e.target.value };
+                patch({ wyomingBridges: next });
+              }}
+              placeholder="satellite host/IP"
+            />
+            <input
+              style={S.inputSmall}
+              type="number"
+              value={bridge.satellitePort}
+              onChange={(e) => {
+                const next = [...wyomingBridges];
+                next[i] = {
+                  ...bridge,
+                  satellitePort: Number(e.target.value),
+                };
+                patch({ wyomingBridges: next });
+              }}
+              placeholder="10700"
+            />
+            <input
+              style={S.inputSmall}
+              value={bridge.tag}
+              onChange={(e) => {
+                const next = [...wyomingBridges];
+                next[i] = { ...bridge, tag: e.target.value };
+                patch({ wyomingBridges: next });
+              }}
+              placeholder="auto"
+            />
+            <Button
+              variant="danger"
+              small
+              onClick={() => {
+                const next = wyomingBridges.filter((_, j) => j !== i);
+                patch({ wyomingBridges: next });
+              }}
+            >
+              Remove
+            </Button>
+          </div>
+        ))}
+        <Button
+          variant="secondary"
+          small
+          onClick={() =>
+            patch({
+              wyomingBridges: [
+                ...wyomingBridges,
+                {
+                  id: "",
+                  enabled: true,
+                  zoneName: "",
+                  satelliteHost: "",
+                  satellitePort: 10700,
+                  tag: "auto",
+                },
+              ],
+            })
+          }
+        >
+          + Add bridge
+        </Button>
       </CollapsibleSection>
 
       <ActionStatus message={saved} />
