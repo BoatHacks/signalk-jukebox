@@ -575,7 +575,7 @@ export default function PluginConfigurationPanel({
         )}
       </CollapsibleSection>
 
-      <CollapsibleSection title="Wyoming satellite bridges (e.g. an espos-p4-cockpit panel's speaker)">
+      <CollapsibleSection title="Wyoming satellite bridges">
         {wyomingBridges.map((bridge, i) => (
           <div key={i} style={S.fieldRow}>
             <input
