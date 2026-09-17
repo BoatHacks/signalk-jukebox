@@ -26,6 +26,7 @@ import {
   createLocalSnapclient,
   renameLocalSnapclientZone,
 } from "./local-snapclient.js";
+import { startAirplayZoneSync } from "./airplay/zone-lifecycle.js";
 import {
   createWyomingBridge,
   renameWyomingBridgeZone,
@@ -101,6 +102,7 @@ export default function plugin(app: App) {
   const store = new StateStore(createInitialState());
   let unpublish: (() => void) | null = null;
   let stopZoneSync: (() => void) | null = null;
+  let stopAirplayZoneSync: (() => void) | null = null;
   let stopPlaybackControls: (() => void) | null = null;
   let stopZonePutHandlers: (() => void) | null = null;
   let stopLocalSnapclientRename: (() => void) | null = null;
@@ -398,9 +400,14 @@ export default function plugin(app: App) {
 
           broadcast(); // don't wait for the first change/timer tick
         }
-        // TODO(implementation): if settings.airplay.enabled, provision the
-        // AirPlay slot pool (airplay/pool.ts) against the running
-        // Snapserver.
+        if (settings.airplay.enabled) {
+          stopAirplayZoneSync = startAirplayZoneSync(
+            snapserverClient,
+            app,
+            settings.airplay.namePattern,
+            (message) => app.error(message),
+          );
+        }
 
         app.setPluginStatus(`Running on port ${MOPIDY_PORT}`);
       });
@@ -465,6 +472,8 @@ export default function plugin(app: App) {
       unpublish = null;
       stopZoneSync?.();
       stopZoneSync = null;
+      stopAirplayZoneSync?.();
+      stopAirplayZoneSync = null;
       stopPlaybackControls?.();
       stopPlaybackControls = null;
       stopPlaybackSync?.();
