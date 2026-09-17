@@ -107,11 +107,74 @@ RUN curl -fsSL -o /tmp/snapweb.deb \
     && apt-get update && apt-get install -y --no-install-recommends /tmp/snapweb.deb \
     && rm -f /tmp/snapweb.deb && rm -rf /var/lib/apt/lists/*
 
-# --- shairport-sync (AirPlay receiver Snapserver's `airplay` stream type
-# spawns) -- confirmed available via trixie's own apt repo (4.3.7-1), well
-# past the metadata-pipe feature's introduction.
-RUN apt-get update && apt-get install -y --no-install-recommends shairport-sync \
+# --- shairport-sync + nqptp (AirPlay receiver Snapserver's `airplay`
+# stream type spawns) -- built from source, not trixie's own apt package
+# (4.3.7-1): that package has no AirPlay 2 support at all, and recent iOS
+# versions have progressively stopped listing AirPlay-1-only ("classic")
+# receivers in the Control Center picker (confirmed against a real iOS 26
+# device: the zone simply never appeared). AirPlay 2 needs shairport-sync
+# built with --with-airplay-2 plus nqptp, its companion PTP clock-sync
+# daemon -- one nqptp instance total, not one per zone, shared by every
+# AirPlay-2-mode shairport-sync process (spawned per zone by Snapserver)
+# over POSIX shared memory; started once in entrypoint.sh, matching this
+# image's existing dbus-daemon/avahi-daemon singleton pattern.
+#
+# Pinned tags (confirmed building clean on aarch64/trixie): shairport-sync
+# 5.5.2, nqptp 1.2.8. --with-airplay-2 pulls in a real FFmpeg dependency
+# (libavcodec/libavformat/libavutil, for AirPlay 2's audio decoding) not
+# needed by the classic-only build -- a meaningfully heavier dependency
+# set than the apt package had, confirmed by build-testing. Build-only
+# packages are purged after `make install` so they don't inflate the
+# final image; this Dockerfile is still single-stage (SPEC.md's deferred
+# multi-stage rework covers the rest of the image, not just this one
+# component).
+ARG SHAIRPORT_SYNC_VERSION=5.5.2
+ARG NQPTP_VERSION=1.2.8
+# dbus-daemon and avahi-daemon themselves (as opposed to their client
+# libraries, e.g. libavahi-client3, which the linked binary pulls in on
+# its own) were never installed directly anywhere in this file -- the
+# apt shairport-sync package this replaces pulled both in transitively as
+# its own dependencies. Confirmed by build-testing: dropping that apt
+# package silently left avahi-daemon (the actual daemon binary
+# entrypoint.sh runs) missing entirely, failing with "avahi-daemon:
+# command not found" at container start. dbus-daemon happened to survive
+# only because something else in this same install still pulls it in
+# transitively -- listed explicitly below too so that isn't relied on.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        avahi-daemon dbus \
+        build-essential git autoconf automake libtool pkg-config \
+        libpopt-dev libconfig-dev libavahi-client-dev libssl-dev \
+        libsoxr-dev libplist-dev libsodium-dev libgcrypt20-dev uuid-dev \
+        xxd libplist-utils libglib2.0-dev \
+        libavutil-dev libavcodec-dev libavformat-dev \
+    && cd /tmp \
+    && git clone --branch "${NQPTP_VERSION}" --depth 1 \
+        https://github.com/mikebrady/nqptp.git \
+    && cd nqptp && autoreconf -fi && ./configure && make -j"$(nproc)" \
+    && make install \
+    && cd /tmp \
+    && git clone --branch "${SHAIRPORT_SYNC_VERSION}" --depth 1 \
+        https://github.com/mikebrady/shairport-sync.git \
+    && cd shairport-sync && autoreconf -fi \
+    && ./configure \
+        --with-avahi --with-ssl=openssl --with-soxr --with-metadata \
+        --with-stdout --with-pipe --with-dbus-interface \
+        --with-mpris-interface --with-airplay-2 \
+    && make -j"$(nproc)" && make install \
+    && cd / && rm -rf /tmp/nqptp /tmp/shairport-sync \
+    && apt-get purge -y --auto-remove \
+        build-essential git autoconf automake libtool pkg-config \
     && rm -rf /var/lib/apt/lists/*
+# Only the build toolchain above is purged, not the -dev packages
+# themselves -- confirmed by build-testing that purging those too
+# (e.g. libavutil-dev) makes apt's --auto-remove treat their pulled-in
+# runtime libraries (libswresample.so.5, etc.) as orphaned and delete
+# them as well, since apt has no idea the manually-built shairport-sync
+# binary still links against them at runtime. The extra header-only
+# weight from keeping the -dev packages is a smaller tradeoff than that
+# breakage; a real image-size pass (already deferred, see this file's
+# other comments) would replace this whole approach with a multi-stage
+# build instead.
 
 WORKDIR /app
 COPY entrypoint.sh /app/entrypoint.sh

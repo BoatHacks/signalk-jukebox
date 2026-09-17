@@ -1,8 +1,8 @@
 #!/bin/bash
 # Container entrypoint (ARCHITECTURE.md §2.4, §7). Renders both config
 # templates, wires up the Mopidy->Snapserver audio pipe and the AirPlay
-# sandbox dir, then runs both processes under real supervision (see the
-# bottom of this file).
+# sandbox dir, then runs Snapserver/Mopidy/nqptp under real supervision
+# (see the bottom of this file).
 #
 # bash, not sh: `wait -n` below is a bashism (Debian's dash has no
 # equivalent) and is the only portable-enough way to block on "whichever
@@ -39,6 +39,16 @@ rm -f /run/dbus/pid
 # itself needs the D-Bus system bus present first.
 dbus-daemon --system --fork
 avahi-daemon --no-chroot -D
+
+# nqptp: AirPlay 2's PTP clock-sync companion daemon (SPEC.md §13). One
+# instance total, not one per zone -- every AirPlay-2-mode shairport-sync
+# process Snapserver spawns (one per zone) shares it over POSIX shared
+# memory, matching the dbus-daemon/avahi-daemon singleton pattern above.
+# Unlike those two, nqptp doesn't self-daemonize (no `-D`/`--fork`
+# equivalent), so it's backgrounded and supervised the same way as
+# Snapserver/Mopidy below rather than fire-and-forget.
+nqptp &
+NQPTP_PID=$!
 
 # Snapserver's runtime-created airplay:// streams (SPEC.md §6.4, §13) must
 # reference an executable inside sandbox_dir -- copied, not symlinked, to
@@ -84,15 +94,15 @@ MOPIDY_PID=$!
 # too, taking the container down with it so podman's own `restart:
 # unless-stopped` policy (container.ts's buildConfig) recreates a clean
 # instance instead of the crash going undetected.
-trap 'kill "$SNAPSERVER_PID" "$MOPIDY_PID" "$SILENCE_PID" 2>/dev/null || true' TERM INT
+trap 'kill "$SNAPSERVER_PID" "$MOPIDY_PID" "$SILENCE_PID" "$NQPTP_PID" 2>/dev/null || true' TERM INT
 
 # `set -e` would otherwise abort this script right at `wait -n` the
 # instant either child exits nonzero (e.g. OOM-killed), skipping the
 # cleanup and explicit exit below -- suspend it just for this one call.
 set +e
-wait -n "$SNAPSERVER_PID" "$MOPIDY_PID"
+wait -n "$SNAPSERVER_PID" "$MOPIDY_PID" "$NQPTP_PID"
 STATUS=$?
 set -e
 
-kill "$SNAPSERVER_PID" "$MOPIDY_PID" "$SILENCE_PID" 2>/dev/null || true
+kill "$SNAPSERVER_PID" "$MOPIDY_PID" "$SILENCE_PID" "$NQPTP_PID" 2>/dev/null || true
 exit "$STATUS"
