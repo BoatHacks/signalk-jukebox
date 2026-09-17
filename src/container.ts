@@ -4,15 +4,17 @@ import {
   type ContainerConfig,
 } from "signalk-container-helper";
 import type { PluginSettings } from "./types.js";
+import { receiverName } from "./airplay/receiver.js";
 
 // The custom signalk-jukebox container image (ARCHITECTURE.md §2.4): Mopidy
 // + Mopidy-MusicBox-Webclient + Snapserver in one image, built from
 // image/Dockerfile (build-tested; see that file's header for why Mopidy-Iris
 // isn't used -- incompatible with the Mopidy 4.x this image needs, and for
-// why Mopidy-MusicBox-Webclient needs a setuptools<80 pin). Snapserver
-// is pinned >= 0.33.0 so the plugin can create/remove per-zone airplay
-// streams at runtime (SPEC.md §6.4, §13) -- no static AirPlay stream pool to
-// configure here.
+// why Mopidy-MusicBox-Webclient needs a setuptools<80 pin). A single
+// AirPlay input is statically declared in snapserver.conf.template
+// (SPEC.md §6.4, revised) -- JUKEBOX_AIRPLAY_ENABLED/
+// JUKEBOX_AIRPLAY_DEVICENAME below are entrypoint.sh's envsubst inputs
+// for it, not a runtime Stream.AddStream call.
 //
 // Published (ARCHITECTURE.md §8): ghcr.io/boathacks/signalk-jukebox:latest,
 // public visibility. Also tagged with the exact npm package version on
@@ -42,6 +44,12 @@ export const SNAPWEB_PORT = 1780;
  * Snapcast's own real default port for this source type. */
 export const ALERTS_PORT = 4953;
 export const ALERTS_STREAM_ID = "Alerts";
+/** A single, statically-declared AirPlay input (snapserver.conf.template's
+ * `source = airplay://...` line) -- not per-zone (SPEC.md §6.4, revised):
+ * a zone is pointed at it manually (src/routes.ts's /source endpoint,
+ * like Alerts/Silence), and it's also folded into MusicAndAlerts as a
+ * third auto-ducking input, priority Alerts > AirPlay > MopidyOnly. */
+export const AIRPLAY_STREAM_ID = "AirPlay";
 
 /** The container's address once `airplay.hostNetworking` is on: sharing
  * the host's network namespace directly means Mopidy's port literally
@@ -68,6 +76,11 @@ export interface CreateManagedContainerArgs {
    * container recreate (not just a plain restart of the same container),
    * as was Mopidy's own Spotify auth cache and library scan cache. */
   dataMount?: { source: string; containerPath: string };
+  /** SignalK vessel name (app.getSelfPath("name")), prefixed onto the
+   * AirPlay input's mDNS-advertised name (settings.airplay.namePattern) --
+   * distinguishes this boat's AirPlay input from any other boat's at the
+   * same marina. Falls back to "Boat" if unset. */
+  boatName?: string;
 }
 
 /** Full ContainerConfig for a tag (pure -- unit-tested directly, same
@@ -77,6 +90,7 @@ export function buildJukeboxConfig(
   settings: PluginSettings,
   libraryMount?: { source: string; containerPath: string },
   dataMount?: { source: string; containerPath: string },
+  boatName = "Boat",
 ): ContainerConfig {
   const hostNetworking = settings.airplay.hostNetworking;
   return {
@@ -173,6 +187,15 @@ export function buildJukeboxConfig(
       JUKEBOX_SPOTIFY_CLIENT_ID: settings.backends.spotify.clientId ?? "",
       JUKEBOX_SPOTIFY_CLIENT_SECRET:
         settings.backends.spotify.clientSecret ?? "",
+      JUKEBOX_AIRPLAY_ENABLED: String(settings.airplay.enabled),
+      // Pre-encoded here, not left to entrypoint.sh's envsubst: a raw
+      // space in the rendered snapserver.conf.template line would break
+      // that `airplay://...?devicename=...` URI's own query-string
+      // parsing (confirmed live -- see receiver.ts's own history of this
+      // exact bug for the per-zone design this superseded).
+      JUKEBOX_AIRPLAY_DEVICENAME: encodeURIComponent(
+        receiverName(settings.airplay.namePattern, boatName, "AirPlay"),
+      ),
     },
     volumes:
       libraryMount || dataMount
@@ -196,6 +219,7 @@ export function createManagedContainer({
   settings,
   libraryMount,
   dataMount,
+  boatName,
 }: CreateManagedContainerArgs): ManagedContainer {
   const hostNetworking = settings.airplay.hostNetworking;
   return new ManagedContainer({
@@ -225,7 +249,7 @@ export function createManagedContainer({
     // absent case (CI, or a misconfigured install).
     managerTimeoutMs: 20_000,
     buildConfig: (tag) =>
-      buildJukeboxConfig(tag, settings, libraryMount, dataMount),
+      buildJukeboxConfig(tag, settings, libraryMount, dataMount, boatName),
     // Confirmed by build-testing (devpod): /mopidy/rpc is POST-only
     // JSON-RPC and returns 405 to a plain GET, which is what
     // signalk-container-helper's readiness prober sends -- using it here

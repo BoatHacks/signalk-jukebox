@@ -136,9 +136,10 @@ export const openApiDocument = {
     "/api/zones/{id}/source": {
       post: {
         tags: ["zones"],
-        summary: "Switch a zone between the Jukebox, Alerts, and Silence streams",
+        summary:
+          "Switch a zone between the Jukebox, Alerts, Silence, and AirPlay streams",
         description:
-          '"jukebox" (the shared music stream, auto-ducking for announcements) or "alerts" (a standing announcement-intake stream other containers can feed, so a zone can be taken off the jukebox without muting its Snapclient entirely) or "silence" (a zone that shouldn\'t hear anything at all, not even announcements, e.g. a sleeping cabin) -- "airplay" is NOT accepted: a zone\'s AirPlay stream is switched to automatically the moment a device connects (SPEC.md §6.4, §12: "connecting is the switch"), never selected manually.',
+          '"jukebox" (the shared music stream, auto-ducking for announcements and AirPlay) or "alerts" (a standing announcement-intake stream other containers can feed, so a zone can be taken off the jukebox without muting its Snapclient entirely) or "silence" (a zone that shouldn\'t hear anything at all, not even announcements, e.g. a sleeping cabin) or "airplay" (the single, statically-declared AirPlay input, SPEC.md §6.4 -- points this zone directly at it, same as alerts/silence).',
         parameters: [{ $ref: "#/components/parameters/ZoneId" }],
         requestBody: {
           required: true,
@@ -148,7 +149,10 @@ export const openApiDocument = {
                 type: "object",
                 required: ["source"],
                 properties: {
-                  source: { type: "string", enum: ["jukebox", "alerts", "silence"] },
+                  source: {
+                    type: "string",
+                    enum: ["jukebox", "alerts", "silence", "airplay"],
+                  },
                 },
               },
             },
@@ -397,7 +401,10 @@ export const openApiDocument = {
             description:
               "Present only if this zone was assigned an N2K/Fusion slot.",
           },
-          activeSource: { type: "string", enum: ["jukebox", "airplay"] },
+          activeSource: {
+            type: "string",
+            enum: ["jukebox", "alerts", "silence", "airplay"],
+          },
           airplay: { $ref: "#/components/schemas/ZoneAirPlayInfo" },
         },
       },

@@ -204,22 +204,6 @@ export class SnapserverClient {
     ).then((r) => r.server.groups.map(toSnapGroup));
   }
 
-  /** Maps each current stream id to its status ("idle"/"playing"/etc) --
-   * used to detect a real AirPlay session starting/ending on a zone's own
-   * receiver stream (SPEC.md §6.4: "connecting is the switch"), since
-   * Group.SetStream alone doesn't say anything about whether a session is
-   * actually active on the stream it points at. A separate call from
-   * getGroups() above (both read Server.GetStatus) rather than folding
-   * this into SnapGroup -- confirmed against a real Snapserver 0.35.0
-   * that `server.streams[]` is a sibling array, not nested under groups. */
-  getStreamStatuses(): Promise<Record<string, string>> {
-    return this.call<{ server: { streams: { id: string; status: string }[] } }>(
-      "Server.GetStatus",
-    ).then((r) =>
-      Object.fromEntries(r.server.streams.map((s) => [s.id, s.status])),
-    );
-  }
-
   setClientVolume(
     clientId: string,
     volume: number,

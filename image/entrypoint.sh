@@ -50,9 +50,12 @@ avahi-daemon --no-chroot -D
 nqptp &
 NQPTP_PID=$!
 
-# Snapserver's runtime-created airplay:// streams (SPEC.md §6.4, §13) must
-# reference an executable inside sandbox_dir -- copied, not symlinked, to
-# avoid any ambiguity in how the containment check resolves symlinks.
+# The AirPlay input's `airplay://` source (added to snapserver.conf below,
+# when enabled) must reference an executable inside sandbox_dir -- copied,
+# not symlinked, to avoid any ambiguity in how Snapserver's containment
+# check resolves symlinks (SPEC.md §6.4, §13). Copied unconditionally: the
+# copy itself is cheap, and it means toggling airplay.enabled later needs
+# no image change.
 cp "$(command -v shairport-sync)" /app/sandbox/shairport-sync
 
 # Mopidy -> Snapserver audio pipe (mopidy.conf.template's [audio] output,
@@ -77,6 +80,30 @@ SILENCE_PID=$!
 
 envsubst < /app/mopidy.conf.template > /data/mopidy.conf
 envsubst < /app/snapserver.conf.template > /etc/snapserver.conf
+
+# A single, statically-declared AirPlay input (SPEC.md §6.4, revised --
+# not per-zone), gated on JUKEBOX_AIRPLAY_ENABLED (container.ts's own env
+# var, from settings.airplay.enabled): snapserver.conf.template can't
+# express "include this line only if..." itself, so it's appended here,
+# and the MusicAndAlerts meta source is rewritten in place to fold it in
+# (priority Alerts > AirPlay > MopidyOnly -- an active AirPlay session
+# ducks the background jukebox music, but a real alert still takes
+# priority over it). JUKEBOX_AIRPLAY_DEVICENAME is pre-percent-encoded by
+# container.ts (a raw space here would break this URI's own query-string
+# parsing -- confirmed live, see receiver.ts's history of this exact bug).
+if [ "$JUKEBOX_AIRPLAY_ENABLED" = "true" ]; then
+  # Inserted BEFORE the meta line, not appended at the end of the file:
+  # confirmed live that Snapserver parses streams in declaration order and
+  # a meta source referencing one declared later fails outright at
+  # startup ("Exception: Unknown stream: AirPlay"), rather than resolving
+  # it lazily.
+  sed -i \
+    "\\#^source = meta:///Alerts/MopidyOnly?name=MusicAndAlerts\$#i source = airplay:///app/sandbox/shairport-sync?name=AirPlay&devicename=${JUKEBOX_AIRPLAY_DEVICENAME}" \
+    /etc/snapserver.conf
+  sed -i \
+    's#source = meta:///Alerts/MopidyOnly?name=MusicAndAlerts#source = meta:///Alerts/AirPlay/MopidyOnly?name=MusicAndAlerts#' \
+    /etc/snapserver.conf
+fi
 
 snapserver --config /etc/snapserver.conf &
 SNAPSERVER_PID=$!

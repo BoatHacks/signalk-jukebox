@@ -1,11 +1,13 @@
 # snapserver.conf template (ARCHITECTURE.md §2.4, §7). Rendered by
 # entrypoint.sh via envsubst. Build-tested against Snapserver 0.35.0.
 #
-# No per-zone AirPlay streams are declared here (SPEC.md §6.4, §13):
-# those are created/removed at runtime via Stream.AddStream/RemoveStream
-# by the plugin (src/airplay/receiver.ts), not pre-declared in static
-# config. This file only needs the MopidyOnly (Mopidy) source and the
-# sandbox_dir that makes runtime airplay:// stream creation possible.
+# The AirPlay input (a single, statically-declared `airplay://` source,
+# not per-zone -- SPEC.md §6.4, revised) is NOT declared here: it's
+# conditional on JUKEBOX_AIRPLAY_ENABLED, and this file has no way to
+# express that itself (envsubst only substitutes variables, it can't omit
+# a whole line). entrypoint.sh appends it, and rewrites the
+# `MusicAndAlerts` meta source below to include it, after rendering this
+# template -- see that file's own comment on this.
 
 [server]
 # Where server.json lives (client/group registration, volume, mute, and
@@ -56,12 +58,16 @@ source = pipe:///tmp/silencefifo?name=Silence&sampleformat=48000:16:2
 # currently active, highest-priority first -- confirmed by build-testing:
 # with Alerts listed first, this stream automatically switches to it the
 # moment audio starts arriving there, then automatically falls back to
-# MopidyOnly the moment Alerts goes idle again, with no zone-reassignment
-# or muting needed from any plugin. MopidyOnly and Alerts keep their own
-# real codec (not `codec=null` as Snapcast's docs suggest for meta-only
-# inputs) because they're still directly connectable in their own right (a
+# the next-highest-priority idle source, with no zone-reassignment or
+# muting needed from any plugin. Every listed source keeps its own real
+# codec (not `codec=null` as Snapcast's docs suggest for meta-only
+# inputs) because each is still directly connectable in its own right (a
 # zone manually switched to "Alerts" via the webapp targets the raw
 # stream, not this one).
+#
+# Alerts/MopidyOnly only here -- entrypoint.sh rewrites this line to
+# Alerts/AirPlay/MopidyOnly when JUKEBOX_AIRPLAY_ENABLED is true (this
+# file has no conditional-line mechanism of its own).
 source = meta:///Alerts/MopidyOnly?name=MusicAndAlerts
 
 # New (never-before-seen) Snapclients default here, not the raw MopidyOnly

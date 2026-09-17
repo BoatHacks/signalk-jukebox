@@ -80,4 +80,33 @@ describe("buildJukeboxConfig", () => {
     );
     expect(config.volumes).toBeUndefined();
   });
+
+  it("passes the AirPlay enabled flag and a percent-encoded, boat-prefixed devicename", () => {
+    const config = buildJukeboxConfig(
+      "latest",
+      settingsWith({ enabled: true }),
+      undefined,
+      undefined,
+      "Tinarasia",
+    );
+    expect(config.env?.JUKEBOX_AIRPLAY_ENABLED).toBe("true");
+    // Not a raw space: confirmed live that breaks the rendered
+    // airplay://...?devicename=... URI's own query-string parsing.
+    expect(config.env?.JUKEBOX_AIRPLAY_DEVICENAME).toBe(
+      "Tinarasia%20-%20AirPlay",
+    );
+  });
+
+  it("falls back to a generic boat name when none is given", () => {
+    const config = buildJukeboxConfig("latest", settingsWith({}));
+    expect(config.env?.JUKEBOX_AIRPLAY_DEVICENAME).toBe("Boat%20-%20AirPlay");
+  });
+
+  it("reflects airplay.enabled=false in the env flag", () => {
+    const config = buildJukeboxConfig(
+      "latest",
+      settingsWith({ enabled: false }),
+    );
+    expect(config.env?.JUKEBOX_AIRPLAY_ENABLED).toBe("false");
+  });
 });

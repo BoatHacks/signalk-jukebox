@@ -26,7 +26,6 @@ import {
   createLocalSnapclient,
   renameLocalSnapclientZone,
 } from "./local-snapclient.js";
-import { startAirplayZoneSync } from "./airplay/zone-lifecycle.js";
 import {
   createWyomingBridge,
   renameWyomingBridgeZone,
@@ -102,7 +101,6 @@ export default function plugin(app: App) {
   const store = new StateStore(createInitialState());
   let unpublish: (() => void) | null = null;
   let stopZoneSync: (() => void) | null = null;
-  let stopAirplayZoneSync: (() => void) | null = null;
   let stopPlaybackControls: (() => void) | null = null;
   let stopZonePutHandlers: (() => void) | null = null;
   let stopLocalSnapclientRename: (() => void) | null = null;
@@ -223,11 +221,18 @@ export default function plugin(app: App) {
           };
         }
 
+        const selfName = app.getSelfPath("name");
+        const boatName =
+          typeof selfName === "string" && selfName.length > 0
+            ? selfName
+            : "Boat";
+
         container = createManagedContainer({
           app,
           settings,
           libraryMount,
           dataMount,
+          boatName,
         });
         if (pendingRouter) {
           finishRouterRegistration(pendingRouter);
@@ -400,14 +405,6 @@ export default function plugin(app: App) {
 
           broadcast(); // don't wait for the first change/timer tick
         }
-        if (settings.airplay.enabled) {
-          stopAirplayZoneSync = startAirplayZoneSync(
-            snapserverClient,
-            app,
-            settings.airplay.namePattern,
-            (message) => app.error(message),
-          );
-        }
 
         app.setPluginStatus(`Running on port ${MOPIDY_PORT}`);
       });
@@ -472,8 +469,6 @@ export default function plugin(app: App) {
       unpublish = null;
       stopZoneSync?.();
       stopZoneSync = null;
-      stopAirplayZoneSync?.();
-      stopAirplayZoneSync = null;
       stopPlaybackControls?.();
       stopPlaybackControls = null;
       stopPlaybackSync?.();
@@ -596,9 +591,14 @@ export default function plugin(app: App) {
             enabled: {
               type: "boolean",
               default: true,
-              title: "Enable AirPlay zones",
+              title: "Enable the AirPlay input",
             },
-            namePattern: { type: "string", default: "{boatName} - {zoneName}" },
+            namePattern: {
+              type: "string",
+              default: "{boatName} - {zoneName}",
+              title:
+                'mDNS-advertised name ({zoneName} always resolves to "AirPlay" -- there is one shared input, not one per zone)',
+            },
             hostNetworking: {
               type: "boolean",
               default: false,

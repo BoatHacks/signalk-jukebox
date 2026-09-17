@@ -240,7 +240,7 @@ export default function PluginConfigurationPanel({
         </>
       )}
 
-      <FieldRow label="AirPlay zones">
+      <FieldRow label="AirPlay input">
         <input
           type="checkbox"
           style={S.checkbox}
@@ -252,7 +252,7 @@ export default function PluginConfigurationPanel({
       </FieldRow>
       {airplay.enabled && (
         <>
-          <FieldRow label="Zone name pattern">
+          <FieldRow label="AirPlay name pattern">
             <input
               style={S.input}
               value={airplay.namePattern}
@@ -278,13 +278,10 @@ export default function PluginConfigurationPanel({
           </FieldRow>
           {!airplay.hostNetworking && (
             <div style={S.infoBanner}>
-              AirPlay receivers won&apos;t be discoverable by iPhones/iPads on
-              the boat WiFi with this off. mDNS advertisement and each
-              zone&apos;s dynamically-chosen RTSP/RTP ports don&apos;t reach the
-              LAN through this container&apos;s default networking at all --
-              there&apos;s no fixed port list to publish the way Snapcast&apos;s
-              stream port can be, since each zone&apos;s AirPlay receiver is
-              created on demand.
+              The AirPlay receiver won&apos;t be discoverable by iPhones/iPads
+              on the boat WiFi with this off. mDNS advertisement and the
+              receiver&apos;s RTSP/RTP ports don&apos;t reach the LAN through
+              this container&apos;s default networking at all.
             </div>
           )}
           {airplay.hostNetworking && (

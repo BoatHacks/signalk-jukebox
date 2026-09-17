@@ -202,7 +202,7 @@ connectMopidyWs();
 // Mutations (source/volume/mute) still go through this plugin's own proxied
 // REST route (routes.ts) -- that's what actually holds the authenticated
 // Snapserver control connection, and it's what enforces the three-value
-// "jukebox"/"alerts"/"silence" contract. ZONES_URL is only used for that;
+// "jukebox"/"alerts"/"silence"/"airplay" contract. ZONES_URL is only used for that;
 // live status is no longer polled from it (see SNAPCAST_WS_URL below).
 const ZONES_URL = `${API_BASE}/api/zones`;
 
@@ -237,6 +237,7 @@ function buildZoneRow(zone) {
           <button class="source-btn jukebox" data-source="jukebox">MusicAndAlerts</button>
           <button class="source-btn alerts" data-source="alerts">Alerts</button>
           <button class="source-btn silence" data-source="silence">Silence</button>
+          <button class="source-btn airplay" data-source="airplay">AirPlay</button>
         </div>
         <div class="zone-actions">
           <button class="icon-btn mute-btn" title="Mute">🔊</button>
@@ -257,15 +258,15 @@ function buildZoneRow(zone) {
   const muteBtn = row.querySelector(".mute-btn");
   const deleteBtn = row.querySelector(".delete-btn");
 
-  // Three exclusive states, not a toggle: "jukebox" is the auto-ducking
+  // Four exclusive states, not a toggle: "jukebox" is the auto-ducking
   // combined stream (routes.ts's JUKEBOX_STREAM_ID, "MusicAndAlerts"
   // underneath -- hears the shared music, automatically interrupted for an
-  // announcement, then automatically resumed); "alerts" hears ONLY
-  // announcements, no jukebox at all, without muting the whole Snapclient;
-  // "silence" hears nothing at all, not even announcements, e.g. a
-  // sleeping cabin. AirPlay is the only source this can't set manually:
-  // it's switched to automatically on connect (routes.ts), never chosen
-  // here.
+  // announcement or an AirPlay session, then automatically resumed);
+  // "alerts" hears ONLY announcements, no jukebox at all, without muting
+  // the whole Snapclient; "silence" hears nothing at all, not even
+  // announcements, e.g. a sleeping cabin; "airplay" points this zone
+  // directly at the single, statically-declared AirPlay input (SPEC.md
+  // §6.4, revised), same mechanism as the other three.
   for (const btn of sourceButtons) {
     btn.addEventListener("click", async () => {
       await zonePost(zone.id, "source", { source: btn.dataset.source });
