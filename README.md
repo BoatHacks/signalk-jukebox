@@ -1,6 +1,18 @@
 # signalk-jukebox
 
-> ⚠️ **AirPlay requires turning off this container's network isolation.**
+> ⚠️ **AirPlay is not working reliably yet and should not be used.**
+> Live testing has reproduced intermittent static/clipping during real
+> AirPlay playback (e.g. from Spotify) that has not been root-caused.
+> Direct injection tests at full digital scale (sine tones, white noise,
+> and real music) came back clean through every stage of the pipeline —
+> the panel's own audio hardware, the wyoming-bridge's resample/downmix,
+> and Snapcast's own AirPlay-specific 44100→48000 resampler — so this
+> looks like a live network/timing issue (WiFi jitter, host CPU
+> contention) rather than a fixed bug reproducible with a static test
+> signal, but it hasn't been confirmed. Until this is resolved, use the
+> jukebox/alerts inputs and leave AirPlay disabled.
+>
+> AirPlay also requires turning off this container's network isolation.
 > Off by default — see [Security note: AirPlay and host
 > networking](#security-note-airplay-and-host-networking) before enabling
 > `airplay.hostNetworking`.
