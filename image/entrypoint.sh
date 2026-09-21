@@ -16,7 +16,18 @@ set -e
 # server.json: client/group registration, volume, mute, and each zone's
 # current stream assignment) both live under it, so both now survive a
 # real container recreate, not just a plain restart of the same container.
-mkdir -p /data /data/snapserver /cache
+mkdir -p /data /data/snapserver /cache /data/playlists
+
+# Seed the default internet-radio playlist once, on first run only --
+# never overwrite it on a later start, so a user's own edits (adding/
+# removing stations via Mopidy-MusicBox-Webclient) survive a container
+# recreate instead of being clobbered back to the shipped default. Gated
+# on JUKEBOX_RADIO_ENABLED (settings.backends.radio.enabled) the same as
+# every other backend toggle -- if radio is off, don't seed it; turning
+# it on later seeds it at that point instead.
+if [ "$JUKEBOX_RADIO_ENABLED" = "true" ] && [ ! -f /data/playlists/internet-radio.m3u ]; then
+  cp /app/default-playlists/internet-radio.m3u /data/playlists/internet-radio.m3u
+fi
 
 # Mopidy -> Snapserver audio pipe (mopidy.conf.template's [audio] output,
 # snapserver.conf.template's [stream] source).

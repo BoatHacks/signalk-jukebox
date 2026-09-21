@@ -106,6 +106,13 @@ WORKDIR /app
 COPY entrypoint.sh /app/entrypoint.sh
 COPY mopidy.conf.template /app/mopidy.conf.template
 COPY snapserver.conf.template /app/snapserver.conf.template
+# Default internet-radio playlist (100 stations, real stream URLs pulled
+# from radio-browser.info's public API, ranked by its real vote count --
+# not a guessed/fabricated list). entrypoint.sh seeds this into /data/
+# playlists once, on first run only, so a user's own later edits to it
+# (adding/removing stations via Mopidy-MusicBox-Webclient) survive a
+# container recreate.
+COPY playlists/internet-radio.m3u /app/default-playlists/internet-radio.m3u
 RUN chmod +x /app/entrypoint.sh
 
 # Mopidy HTTP/JSON-RPC + Iris (ARCHITECTURE.md §2.2 reverse-proxies this).
