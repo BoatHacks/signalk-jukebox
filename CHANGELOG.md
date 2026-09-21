@@ -6,6 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-21
+
+### Added
+
+- An app icon (`public/assets/icons/icon-512.png`, `signalk.appIcon` in
+  `package.json`), matching signalk-stowage-mgmt's convention. Also used
+  as the webapp's favicon and PWA icons: a 192px size added alongside
+  the existing 512px one, a `manifest.json` declaring both, and
+  `<link rel="icon">`/`apple-touch-icon`/`manifest` plus `theme-color`
+  wired up in `public/index.html`'s head.
+
+### Changed
+
+- Dropped the "first experimental release -- completely untested"
+  README status paragraph and the matching npm package description
+  text. Per-feature technical caveats that are still genuinely open
+  (Fusion-Link MFD hardware interop, SPEC.md §13) are unchanged -- this
+  only drops the blanket project-status disclaimer.
+- Dropped two leftover "airplay" mentions in `package.json`'s
+  description/keywords that the 0.1.9 AirPlay removal missed.
+
 ## [0.1.9] - 2026-09-21
 
 ### Removed
