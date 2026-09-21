@@ -180,6 +180,11 @@ WORKDIR /app
 COPY entrypoint.sh /app/entrypoint.sh
 COPY mopidy.conf.template /app/mopidy.conf.template
 COPY snapserver.conf.template /app/snapserver.conf.template
+# Default config path (confirmed via `shairport-sync --help`) -- picked
+# up automatically, no --configfile= flag needed on the CLI Snapcast's
+# own airplay_stream.cpp constructs. See that file's own header comment
+# for why output_rate must be forced here.
+COPY shairport-sync.conf /usr/local/etc/shairport-sync.conf
 RUN chmod +x /app/entrypoint.sh
 
 # Mopidy HTTP/JSON-RPC + Iris (ARCHITECTURE.md §2.2 reverse-proxies this).

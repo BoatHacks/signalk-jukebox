@@ -91,6 +91,20 @@ envsubst < /app/snapserver.conf.template > /etc/snapserver.conf
 # priority over it). JUKEBOX_AIRPLAY_DEVICENAME is pre-percent-encoded by
 # container.ts (a raw space here would break this URI's own query-string
 # parsing -- confirmed live, see receiver.ts's history of this exact bug).
+#
+# No `&sampleformat=` on the airplay:// URI below, unlike every other
+# source line in this file -- confirmed against Snapcast's own source
+# (server/streamreader/stream_manager.cpp) that it unconditionally
+# overwrites any sampleformat query parameter to "44100:16:2" for every
+# airplay-type stream, regardless of what's given here. A first attempt
+# at this feature added `&sampleformat=44100:16:2` explicitly, matching
+# every other stream -- it was a silent no-op (Snapcast overwrote it to
+# the same value it was already forcing) and didn't fix a real rhythmic-
+# static bug this project hit live. The actual fix is
+# shairport-sync.conf's `stdout.output_rate = 44100` (see that file's own
+# comment): shairport-sync 5.x defaults to actually *outputting* 48000 Hz
+# once a client negotiates AirPlay 2, which is what Snapcast's hardcoded
+# 44100 assumption was actually mismatched against.
 if [ "$JUKEBOX_AIRPLAY_ENABLED" = "true" ]; then
   # Inserted BEFORE the meta line, not appended at the end of the file:
   # confirmed live that Snapserver parses streams in declaration order and
