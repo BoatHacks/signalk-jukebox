@@ -26,22 +26,33 @@ enabled = ${JUKEBOX_LOCAL_ENABLED}
 media_dir = /music
 
 [m3u]
-# Mopidy's built-in m3u extension defaults base_dir to the literal string
-# $XDG_MUSIC_DIR -- confirmed by build-testing that Mopidy 4.x's path
-# expansion only resolves XDG_CACHE_DIR/XDG_CONFIG_DIR/XDG_DATA_DIR (from
-# the XDG base directory spec), not XDG_MUSIC_DIR (an xdg-user-dirs
-# concept, unrelated), so the default is permanently unexpandable and
-# must be overridden here instead of via an env var.
+# `playlists_dir` -- not `base_dir` -- is what Mopidy's m3u extension
+# actually scans for playlist files (confirmed by reading its source,
+# mopidy/_exts/m3u/playlists.py: `as_list()` iterates `playlists_dir`;
+# `base_dir` is only used to resolve a playlist's own *relative* track
+# paths, e.g. local music files referenced by a relative path within an
+# m3u -- irrelevant here since every entry in the seeded playlist is an
+# absolute http(s) URL). Left unset, `playlists_dir` falls back to
+# Mopidy's own extension data dir (`Extension.get_data_dir()`, under
+# `[core] data_dir` above) -- confirmed live this is where an unrelated,
+# pre-existing "[Radio Streams].m3u8" file was actually being served
+# from instead of the seeded playlist below, even with `base_dir` set
+# correctly (a real bug in an earlier version of this file: setting only
+# `base_dir` looked plausible from Mopidy's own default ext.conf
+# defaulting `base_dir` to `$XDG_MUSIC_DIR`, but that default is a red
+# herring -- it's `playlists_dir`, defaulted to empty in the same
+# ext.conf, that actually matters).
 #
-# Under /data/playlists, not /music: /music is the local-library bind
-# mount (container.ts's libraryMount), which is entirely conditional on
-# backends.local.enabled and a configured libraryPath -- with local
-# disabled (a real, common config, e.g. a radio-only install), /music
-# isn't mounted at all, so an m3u file placed there would never survive
-# a container recreate and might not even be a real directory. /data is
-# mounted unconditionally (container.ts's dataMount), so playlists
-# (including the seeded internet-radio.m3u, entrypoint.sh) persist
-# regardless of the local backend's own state.
+# Both point at /data/playlists, not /music: /music is the local-library
+# bind mount (container.ts's libraryMount), which is entirely
+# conditional on backends.local.enabled and a configured libraryPath --
+# with local disabled (a real, common config, e.g. a radio-only
+# install), /music isn't mounted at all, so a playlist placed there
+# would never survive a container recreate and might not even be a real
+# directory. /data is mounted unconditionally (container.ts's
+# dataMount), so playlists (including the seeded internet-radio.m3u,
+# entrypoint.sh) persist regardless of the local backend's own state.
+playlists_dir = /data/playlists
 base_dir = /data/playlists
 
 [file]
