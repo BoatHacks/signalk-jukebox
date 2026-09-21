@@ -10,11 +10,10 @@ import { claimN2kZone, N2K_ZONE_CAP } from "./n2k/zone-mapping.js";
 //
 // "MusicAndAlerts" is the fixed stream id a zone means by "playing the
 // jukebox" (snapserver.conf.template's
-// `source = meta:///Alerts/AirPlay/MopidyOnly?name=MusicAndAlerts`) -- a
-// Snapcast meta stream that automatically plays whichever of Alerts/
-// AirPlay/MopidyOnly is currently active, in that priority order, so every
-// zone on it auto-ducks for an announcement or an AirPlay session with no
-// muting or reassignment needed. "MopidyOnly"
+// `source = meta:///Alerts/MopidyOnly?name=MusicAndAlerts`) -- a Snapcast
+// meta stream that automatically plays whichever of Alerts/MopidyOnly is
+// currently active, in that priority order, so every zone on it auto-ducks
+// for an announcement with no muting or reassignment needed. "MopidyOnly"
 // itself (the raw Mopidy-backed stream meta reads from) is never a zone's
 // own direct assignment anymore -- LEGACY_JUKEBOX_STREAM_IDS below exists
 // only to catch zones still on an earlier name for "the jukebox" (this
@@ -28,11 +27,7 @@ import { claimN2kZone, N2K_ZONE_CAP } from "./n2k/zone-mapping.js";
 // a zone is manually parked on (same endpoint) to hear literally nothing,
 // not even announcements -- e.g. a sleeping cabin (same file's
 // `source = pipe:///tmp/silencefifo?name=Silence&...`, fed continuously
-// from /dev/zero by entrypoint.sh). "AirPlay" (container.ts's
-// AIRPLAY_STREAM_ID) is the single, statically-declared AirPlay input a
-// zone can also be manually pointed at directly (SPEC.md §6.4, revised) --
-// falls into the same "anything else" bucket below as a defensive
-// fallback, but is otherwise a known id like the three above.
+// from /dev/zero by entrypoint.sh).
 
 const JUKEBOX_STREAM_ID = "MusicAndAlerts";
 const LEGACY_JUKEBOX_STREAM_IDS = ["Jukebox", "Output"];
@@ -89,8 +84,6 @@ export function startZoneSync(
       for (const group of groups) {
         for (const client of group.clients) {
           seen.add(client.id);
-          const existing = store.getZone(client.id);
-
           // Zone -> n2kZone is a one-time, permanent claim (SPEC.md §2)
           // read from the PERSISTED assignment map, not the in-memory
           // zone record above -- that record starts empty every restart,
@@ -117,15 +110,12 @@ export function startZoneSync(
             volume: client.volume,
             muted: client.muted,
             activeSource:
-              group.streamId === JUKEBOX_STREAM_ID
-                ? "jukebox"
-                : group.streamId === ALERTS_STREAM_ID
-                  ? "alerts"
-                  : group.streamId === SILENCE_STREAM_ID
-                    ? "silence"
-                    : "airplay",
+              group.streamId === ALERTS_STREAM_ID
+                ? "alerts"
+                : group.streamId === SILENCE_STREAM_ID
+                  ? "silence"
+                  : "jukebox",
             n2kZone,
-            airplay: existing?.airplay,
           });
         }
       }

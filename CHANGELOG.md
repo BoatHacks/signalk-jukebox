@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Removed
+
+- AirPlay support entirely: the AirPlay input (single shared receiver,
+  previously per-zone receivers), the `airplay.*` config schema
+  (`enabled`, `namePattern`, `hostNetworking`), `zone.airplay` state
+  (mDNS connection status, DAAP track metadata), the shairport-sync/
+  nqptp build in the container image, and host-networking support (which
+  existed solely for AirPlay's mDNS discovery -- the container now
+  always runs in bridge mode). Live testing on a real boat reproduced
+  intermittent static/clipping during real AirPlay playback (e.g. from
+  Spotify); extensive isolation testing (injecting known-amplitude sine
+  tones, white noise, and real music directly at full digital scale into
+  every stage of the pipeline -- the panel's own audio hardware, the
+  wyoming-bridge's resample/downmix, and Snapcast's own AirPlay-specific
+  44100->48000 resampler) came back clean every time, pointing at a live
+  network/timing issue rather than a fixed, reproducible bug in this
+  plugin's own code. Rather than ship a feature that intermittently
+  degrades audio quality with no confirmed fix, it was removed outright.
+  See SPEC.md §12/§13 for the full design/debugging history.
+
 ## [0.1.8] - 2026-09-16
 
 ### Fixed
@@ -191,7 +211,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - A fourth Snapcast stream, "Silence" (`pipe:///tmp/silencefifo`, fed
   continuously from `/dev/zero`) — for a zone that shouldn't hear anything
   at all, not even announcements, e.g. a sleeping cabin. `POST
-  /api/zones/:id/source` now also accepts `"silence"`; the webapp's
+/api/zones/:id/source` now also accepts `"silence"`; the webapp's
   per-zone control is now three exclusive buttons
   (MusicAndAlerts/Alerts/Silence) instead of a two-way toggle.
 - A third Snapcast stream, "MusicAndAlerts" (`meta:///Alerts/MopidyOnly`,

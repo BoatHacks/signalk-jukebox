@@ -88,7 +88,8 @@ describe("registerPlaybackVolumePutHandler", () => {
 });
 
 describe("registerPlaybackControlPutHandlers", () => {
-  function fakeMopidy(): MopidyClient & Record<string, ReturnType<typeof vi.fn>> {
+  function fakeMopidy(): MopidyClient &
+    Record<string, ReturnType<typeof vi.fn>> {
     return {
       play: vi.fn().mockResolvedValue(undefined),
       pause: vi.fn().mockResolvedValue(undefined),
@@ -152,7 +153,9 @@ describe("registerPlaybackControlPutHandlers", () => {
   it("reports a backend failure via a 502, not a thrown error", async () => {
     const { app, handlers } = fakeApp();
     const mopidy = fakeMopidy();
-    (mopidy.play as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("connection refused"));
+    (mopidy.play as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error("connection refused"),
+    );
     registerPlaybackControlPutHandlers(app, { client: mopidy });
 
     const result = await callHandler(

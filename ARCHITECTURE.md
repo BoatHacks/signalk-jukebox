@@ -56,25 +56,16 @@ command from any one of them is visible everywhere else (SPEC.md §3.2).
                                 │ Snapcast stream :1704
                      ┌──────────▼──────────────────────────┐
                      │   boat LAN                            │
-                     │  Snapclient: Cockpit  (n2kZone 0)      │◀── own AirPlay receiver "Jukebox - Cockpit"
-                     │  Snapclient: Salon    (n2kZone 1)      │◀── own AirPlay receiver "Jukebox - Salon"
-                     │  Snapclient: Cabin    (no N2K slot)    │◀── own AirPlay receiver "Jukebox - Cabin"
+                     │  Snapclient: Cockpit  (n2kZone 0)      │
+                     │  Snapclient: Salon    (n2kZone 1)      │
+                     │  Snapclient: Cabin    (no N2K slot)    │
                      └──────────────────────────────────────┘
 ```
 
-Each zone gets its own Snapcast `airplay`-type stream (each managing its
-own `shairport-sync` instance + mDNS advertisement), **created the
-moment the zone connects and removed the moment it disconnects** — no
-pool, no cap, no persisted slot. Confirmed via research (§5, SPEC.md
-§13): Snapserver ≥ 0.33.0's control API can both create and cleanly
-remove `process`-type streams (which `airplay` is) at runtime, via a
-`stream.sandbox_dir` containment check rather than an outright block —
-an earlier design believed this was permanently closed and built a
-pre-provisioned-pool workaround around that belief; it wasn't, and the
-workaround is gone. Each zone's Snapclient keeps a single Snapcast group
-for its whole lifetime; switching between the shared Jukebox (Mopidy)
-stream and that zone's own AirPlay receiver is `Group.SetStream` on that
-one group — fully dynamic, no restart (SPEC.md §2, §6.4).
+Each zone's Snapclient keeps a single Snapcast group for its whole
+lifetime; switching between the shared Jukebox stream, the Alerts
+stream, and Silence is `Group.SetStream` on that one group — fully
+dynamic, no restart (SPEC.md §2, §6.1).
 
 Snapclients are external — deployed and managed independently, out of
 this plugin's scope (SPEC.md §1.4). The N2K bus connection is likewise
@@ -115,7 +106,7 @@ other directly) when a command arrives on its interface.
   (`start()`, `stop()`, update routes) — follows the exact pattern in
   signalk-container-helper's README "Quick start: a managed container".
 - Reverse-proxies HTTP requests to Mopidy's JSON-RPC endpoint (`/mopidy/
-  rpc`) at a plugin-owned path, so the browser never needs to know the
+rpc`) at a plugin-owned path, so the browser never needs to know the
   container's internal port — used by the plugin's own `public/` webapp.
   Mopidy's own web client (currently Mopidy-MusicBox-Webclient, Iris once
   compatible — SPEC.md §7, §12) is NOT reverse-proxied: its UI runs
@@ -154,7 +145,7 @@ other directly) when a command arrives on its interface.
   require muting its Snapclient outright, which would also silence
   announcements meant for it (SPEC.md §12). `zone-sync.ts` derives
   `activeSource` as `"alerts"` when a group's `stream_id` resolves to
-  this stream, same mechanism as the existing `"jukebox"`/`"airplay"`
+  this stream, same mechanism as the existing `"jukebox"`/`"silence"`
   cases. Published to the LAN the same way as `SNAPWEB_PORT`/`MOPIDY_PORT`
   above (container.ts's `ports`) — not routed through this plugin's own
   REST API at all, so any producer just needs a plain TCP connection.
@@ -179,7 +170,7 @@ other directly) when a command arrives on its interface.
 - A fourth stream, `"Silence"` (`pipe:///tmp/silencefifo?name=Silence`,
   snapserver.conf.template), for a zone that should hear nothing at all,
   not even announcements. `entrypoint.sh` starts `cat /dev/zero >
-  /tmp/silencefifo &` before Snapserver — all-zero bytes are digital
+/tmp/silencefifo &` before Snapserver — all-zero bytes are digital
   silence in S16LE PCM, and the FIFO's own kernel buffer naturally paces
   the writer to Snapserver's actual read rate, so no audio tooling or
   sample-rate awareness is needed on the writer side. `routes.ts`'s
@@ -190,29 +181,13 @@ other directly) when a command arrives on its interface.
   plugin's own persistent data dir at `/data`, resolved the same way
   `libraryMount` already was (`resolveMount()` against
   `app.getDataDirPath()`, not `ContainerConfig.signalkDataMount` — that
-  resolves to *signalk-container's* own data dir, per its own doc
+  resolves to _signalk-container's_ own data dir, per its own doc
   comment) but unconditionally, not gated on the local-library backend.
   Mopidy's own `data_dir`/`cache_dir` (mopidy.conf.template) and
   Snapserver's `[server] datadir` (snapserver.conf.template, pointed at
   `/data/snapserver`) both live under it now — confirmed the hard way
   that neither survived a real container recreate before this, only a
   plain restart of the same container.
-- **Resolves its own address differently under `airplay.hostNetworking`
-  (SPEC.md §12).** The normal path (`signalkAccessiblePorts` +
-  `readiness`) can't be used there at all: confirmed against a real
-  production instance that signalk-container discards `networkMode:
-"host"` outright the moment `signalkAccessiblePorts` is also set,
-  silently reverting to bridge mode — which meant this container ran in
-  bridge mode even with host networking supposedly on, while `ports`
-  was _also_ omitted (since the code assumed host networking was really
-  applying), leaving Snapcast completely unpublished either way. Fixed
-  by omitting both `signalkAccessiblePorts` and `readiness` under host
-  networking (the latter depends on the former for address resolution,
-  and a real host-networking container publishes no parseable ports at
-  all for the fallback path either) and substituting a hardcoded
-  `HOST_NETWORKING_ADDRESS` (`container.ts`) instead: sharing the
-  host's network namespace makes Mopidy's port simply _be_ the host's
-  own port, nothing left to resolve.
 - Polls Mopidy's JSON-RPC API (`playback-sync.ts`, same pattern
   `zone-sync.ts` uses for Snapserver) for playback state/track/volume/
   mute, writing every change into the canonical store (§2.1) --
@@ -233,37 +208,9 @@ other directly) when a command arrives on its interface.
   their volume/mute, writing zone state into the canonical store;
   applies zone volume/mute writes that originated elsewhere to Snapserver
   the same way.
-- **Creates and removes each zone's AirPlay receiver** (SPEC.md §6.4;
-  `src/airplay/receiver.ts`) — confirmed via research (SPEC.md §13) that
-  Snapserver ≥ 0.33.0 supports this at runtime via `Stream.AddStream`/
-  `RemoveStream`, superseding an earlier pre-provisioned-pool design. On
-  zone connect: `Stream.AddStream` with an `airplay://` URI carrying the
-  zone's real name from the start (no placeholder-then-rename step). On
-  zone disconnect: `Stream.RemoveStream` — confirmed to cleanly kill the
-  `shairport-sync` process group, not orphan it. Neither the new stream
-  nor its removal touches the zone's group directly — creating a
-  receiver doesn't switch the zone onto it (§2's "connecting is the
-  switch" rule); that's `src/airplay/zone-binding.ts`'s job, described
-  next.
-- **Switches each zone between its Jukebox and AirPlay streams**
-  (`src/airplay/zone-binding.ts`): each zone's Snapclient keeps one
-  Snapcast group for its whole lifetime; watching for that group's
-  stream-status changes (an AirPlay session starting/ending, detected
-  via Snapserver reporting the stream's status — SPEC.md §3.2) drives a
-  `Group.SetStream` call pointing the zone's _existing_ group at either
-  the shared Jukebox stream or that zone's own AirPlay stream — never a
-  client reassignment between groups, and no group is ever created or
-  deleted (there is no such RPC, SPEC.md §13). Writes the resulting
-  `activeSource` into canonical state (§2.1).
-- **Tails each zone's `shairport-sync` metadata pipe** (SPEC.md §6.4;
-  `src/airplay/metadata.ts`) and writes parsed title/artist/album into
-  that zone's `Zone.airplay.track` (§2.1) as it arrives — feeds both the
-  zone-level SK path and, for N2K-zoned zones, the N2K/Fusion adapter's
-  broadcast (§2.3, SPEC.md §6.3).
 - Serves the Admin config panel (via `signalk-container-helper/ui`
   building blocks) for backend toggles, library path, Spotify
-  credentials, zone controls, N2K/Fusion settings, AirPlay toggle, and
-  image updates.
+  credentials, zone controls, N2K/Fusion settings, and image updates.
 
 ### 2.3 NMEA2000 / Fusion-Link adapter
 
@@ -293,32 +240,28 @@ other directly) when a command arrives on its interface.
   hardware — SPEC.md §13's bus-identity risk remains genuinely
   unverified).
 - **Outbound:** on every canonical-store change event, `FusionAdapter.
-  broadcastState()` constructs the relevant `@canboat/ts-pgns` PGN 130820
+broadcastState()` constructs the relevant `@canboat/ts-pgns` PGN 130820
   status objects and sends each via `app.emit('nmea2000JsonOut',
-  pgnInstance)` — confirmed against `sbender9/signalk-fusion-stereo`'s
+pgnInstance)` — confirmed against `sbender9/signalk-fusion-stereo`'s
   own real source (not the flat-string `app.emit('nmea2000out',
-  pgnString)` convention this doc originally assumed) that a modern
+pgnString)` convention this doc originally assumed) that a modern
   SignalK server (`app.config.version` ≥ 2.15.0) accepts the constructed
   PGN object directly, no Actisense-string encoding step needed. Also
   re-broadcasts current state on a periodic interval
   (`FUSION_REFRESH_INTERVAL_MS`, `fusion.ts`) and immediately on a
   decoded `requestStatus` command, so a device joining the bus
   mid-session gets current state without waiting for the next actual
-  change (SPEC.md §6.3). **Now-playing source selection** (device-wide
-  field, SPEC.md §6.3, §12): Mopidy's track, unless an N2K-zoned zone's
-  `activeSource` is `airplay`, in which case that zone's `Zone.airplay.
-  track` if present (else the "AirPlay Active" placeholder) — and if
-  more than one N2K-zoned zone is on AirPlay simultaneously, the lowest
-  `n2kZone` number's track wins.
+  change (SPEC.md §6.3). **Now-playing source** (device-wide field,
+  SPEC.md §6.3): always Mopidy's own current track.
 - **Inbound:** `app.on('N2KAnalyzerOut', ...)` receives every PGN on the
   bus, already decoded into a `@canboat/ts-pgns`-shaped object (no raw
   byte parsing needed) — `FusionAdapter.decodeIncoming()` matches it
   against the known PGN 126720 Fusion command sub-messages via each
   class's own static `isMatch()`, and `apply-command.ts`'s
-  `applyFusionCommand()` dispatches the result through the *exact* same
+  `applyFusionCommand()` dispatches the result through the _exact_ same
   methods the REST/webapp write paths already use (`MopidyClient.play()/
-  pause()/next()/previous()/setMute()`, `SnapserverClient.
-  setClientVolume()` + `store.setZone()`) — an MFD is not a
+pause()/next()/previous()/setMute()`, `SnapserverClient.
+setClientVolume()` + `store.setZone()`) — an MFD is not a
   second-class caller (SPEC.md §6.3). `FusionSetSource`/`FusionSetPower`
   decode to no actionable command (single-virtual-source model, no
   "power" concept of this plugin's own).
@@ -490,9 +433,8 @@ the source of truth for field-level detail, SPEC.md §4 is.
 | Plugin runtime         | Node.js / TypeScript                                                                                                                                 | Matches signalk-container-helper's requirement (Node ≥ 22, ESM) and the rest of the SignalK plugin ecosystem                                                                                                                        |
 | Container helper       | `signalk-container-helper` (`ManagedContainer`)                                                                                                      | Purpose-built for exactly this lifecycle; avoids re-deriving polling/readiness/update-route code every containerized plugin has hand-rolled                                                                                         |
 | Music server           | Mopidy                                                                                                                                               | Extensible backend model (local/radio/Spotify from one server), mature, actively maintained                                                                                                                                         |
-| Web client             | Iris (intended); Mopidy-MusicBox-Webclient currently, LAN-direct not proxied                                                                             | Iris avoids building a competing player UI (SPEC.md §12), but is confirmed incompatible with the Mopidy 4.x this project requires (jaedb/Iris#999, unresolved) — swap back once that's fixed upstream                               |
+| Web client             | Iris (intended); Mopidy-MusicBox-Webclient currently, LAN-direct not proxied                                                                         | Iris avoids building a competing player UI (SPEC.md §12), but is confirmed incompatible with the Mopidy 4.x this project requires (jaedb/Iris#999, unresolved) — swap back once that's fixed upstream                               |
 | Multi-zone audio       | Snapcast (Snapserver in-container, Snapclients external)                                                                                             | Purpose-built for synced multi-zone playback with independent per-zone volume; existing Snapclient images/hardware boaters can deploy independently                                                                                 |
-| AirPlay receiving      | Snapcast's built-in `airplay` stream source type (wraps `shairport-sync` per stream)                                                                 | Reuses Snapcast's own process/mDNS lifecycle management per stream instead of the plugin hand-rolling multiple `shairport-sync` instances (SPEC.md §12)                                                                             |
 | Canonical state store  | In-process `EventEmitter`-backed object, no external DB                                                                                              | State is small (playback + a handful of zones), lives entirely for the plugin's own runtime, and needs sub-second propagation to adapters — a database would add latency and an operational dependency for no benefit at this scale |
 | NMEA2000 / Fusion-Link | Encode/decode against SignalK's own N2K provider (`app.emit('nmea2000out', ...)` + PGN-in hook); PGN definitions sourced from Canboat where possible | Rides the boat's existing N2K gateway instead of requiring dedicated CAN hardware/access for this plugin (SPEC.md §1.4, §13)                                                                                                        |
 | Admin config panel     | React via `signalk-container-helper/ui`                                                                                                              | Reuses the shared status-card/version-dropdown/update-controls vocabulary rather than hand-copying it (per that library's stated purpose)                                                                                           |
@@ -510,26 +452,12 @@ the source of truth for field-level detail, SPEC.md §4 is.
   snapshot/restore. Contract: Mopidy's documented core API
   (`core.playback.*`, `core.tracklist.*`).
 - **Snapserver JSON-RPC control API** (in-container) — zone discovery,
-  volume/mute control, and per-zone AirPlay stream create/remove/switch
-  (SPEC.md §6.4). **Confirmed via research (SPEC.md §13), in two passes:**
-  (1) `Stream.AddStream`/`RemoveStream` can create/remove `process`-type
-  streams (`airplay` included) as of Snapserver v0.33.0+ (PR #1444,
-  "Sandbox") — the v0.31.0 restriction that motivated an earlier
-  pre-provisioned-pool design was a real, but version-specific,
-  CVE-2023-36177 mitigation, since loosened in favor of a `stream.
-sandbox_dir` executable-path containment check. This project pins its
-  own Snapserver version (§2.4), so requiring ≥ 0.33.0 costs nothing.
-  (2) `RemoveStream` was independently confirmed to SIGINT the whole
-  process group (killing `shairport-sync` and its children, not
-  orphaning them) and to leave any group still pointed at the removed
-  stream merely unassigned (silent), not errored — the one caveat is an
-  open Snapcast bug (#1455) where a stream URI's `controlscript=`
-  parameter specifically leaks on removal; this plugin doesn't use that
-  parameter (§6.4), so it doesn't apply. There is no `Group.Create`/
-  `Delete` RPC — `Group.SetStream` (pointing an existing group at a
-  different stream) is what switches a zone between Jukebox and AirPlay,
-  never a group creation. Contract: Snapcast's documented JSON-RPC
-  protocol (`doc/json_rpc_api/control.md` in the Snapcast repo, now at
+  volume/mute control, and per-zone stream switching (SPEC.md §6.1).
+  There is no `Group.Create`/`Delete` RPC — `Group.SetStream` (pointing
+  an existing group at a different stream) is what switches a zone
+  between Jukebox, Alerts, and Silence, never a group creation. Contract:
+  Snapcast's documented JSON-RPC protocol (`doc/json_rpc_api/control.md`
+  in the Snapcast repo, now at
   `snapcast/snapcast` — moved from `badaix/snapcast`). **Wire protocol
   confirmed by build-testing against a real Snapserver 0.35.0:** despite
   the config section conventionally named `[http]`, the control port does
@@ -607,29 +535,6 @@ ts-pgns` (the structured PGN library `signalk-fusion-stereo` uses for
   REST/SK paths, physical bus access for N2K), not inside the store.
 - **Library mount is read-only** at the container level — Mopidy has no
   write path into the user's music folder even if compromised.
-- **AirPlay receivers are unauthenticated by default**, same as a stock
-  `shairport-sync`/home AirPlay speaker — anyone on the boat LAN who can
-  see the mDNS advertisement can connect and play audio to that zone
-  while it's not otherwise in use. `shairport-sync` supports PIN-based
-  pairing; whether to enable it (trading zero-friction guest use for some
-  protection) is a config-time tradeoff to expose, not decided here.
-  mDNS names (`{boatName} - {zoneName}`, SPEC.md §9) are broadcast in
-  clear on the LAN — a mild information disclosure (boat name, zone
-  layout) worth a one-line README note, not a blocking concern.
-- **AirPlay requires opting into `networkMode: host` (`airplay.
-hostNetworking`, SPEC.md §9, §12) — a real, larger exposure than the
-  point above, not just "unauthenticated on the LAN."** Host networking
-  removes this container's network namespace isolation entirely: every
-  port it opens binds directly on the host's real interfaces, sharing
-  the host's full port space with every other process on the machine
-  (the SignalK server itself included), and the container can reach
-  anything the host's own network stack can reach with no NAT boundary
-  in between. This is confirmed to be the only working option given
-  this project's actual constraints (SPEC.md §12 documents the mDNS-
-  reflector and macvlan alternatives investigated and ruled out) — not
-  a default, and not silently applied: the config panel's toggle is off
-  by default and its warning banner states the tradeoff plainly before
-  an operator opts in.
 - **Dependency audit: no install script runs on a real deployment.**
   Checked `package-lock.json` for every dependency (direct and
   transitive) carrying a `hasInstallScript` flag (npm's own marker for a
@@ -640,19 +545,6 @@ hostNetworking`, SPEC.md §9, §12) — a real, larger exposure than the
   on Linux (Raspberry Pi or similar), where npm skips `fsevents`
   entirely on the OS mismatch — so in practice zero install scripts run
   for a real install of this plugin. No other dependency has one.
-- **Snapserver's `stream.sandbox_dir` containment check (SPEC.md §13)
-  exists specifically because unrestricted process-stream creation was a
-  real, exploited-class vulnerability (CVE-2023-36177, arbitrary command
-  execution) — it replaced, rather than removed, that protection.** This
-  plugin's `airplay://` stream URIs (§2.2, `src/airplay/receiver.ts`)
-  must only ever reference the `shairport-sync` executable the image
-  places inside the configured sandbox directory (`image/Dockerfile`) —
-  never a user-influenced or dynamically-constructed path. The zone
-  name embedded in each stream's `name=` parameter is free text (from
-  Snapclient-reported hostnames or SK config) and must be treated as
-  such when building the URI — not filesystem-path input, but still
-  worth sanitizing/escaping properly rather than string-concatenating it
-  in.
 
 ## 7. File Structure
 
@@ -682,13 +574,9 @@ signalk-jukebox/
 │   │   ├── fusion.ts          # Fusion-Link encode/decode + address claiming
 │   │   ├── entertainment-pgn.ts # standard NMEA2000 Entertainment PGN encode/decode
 │   │   └── zone-mapping.ts    # Snapclient id <-> n2kZone persistence (§2.1)
-│   ├── airplay/
-│   │   ├── receiver.ts         # per-zone Stream.AddStream/RemoveStream create+remove (§2.2, §6.4)
-│   │   ├── zone-binding.ts     # Group.SetStream switch between Jukebox/AirPlay, same group throughout (§2.2, §6.4)
-│   │   └── metadata.ts         # tails each zone's shairport-sync metadata pipe, parses DAAP tags into Zone.airplay.track (§2.2, SPEC.md §6.4)
 │   ├── duck-triggers/
-│   │   ├── vhf.ts              # communication.vhf.busy -> Mopidy pause/resume (§2.5, SPEC.md §6.5)
-│   │   └── voice.ts            # voice.satellites.*.state -> zone volume duck/restore (§2.5, SPEC.md §6.5)
+│   │   ├── vhf.ts              # communication.vhf.busy -> Mopidy pause/resume (§2.5, SPEC.md §6.4)
+│   │   └── voice.ts            # voice.satellites.*.state -> zone volume duck/restore (§2.5, SPEC.md §6.4)
 │   ├── routes.ts              # /api/* Express routes
 │   ├── openapi.ts              # OpenAPI 3.0.3 doc for the REST API, exposed via plugin.getOpenApi (SPEC.md §6.1)
 │   ├── ghcr-versions.ts       # GHCR tags/list -> VersionInfo[], backs GET /api/versions (SPEC.md §6.1)
@@ -755,7 +643,7 @@ signalk-jukebox/
   [Linux Voice Assistant](https://github.com/OHF-Voice/linux-voice-assistant),
   which uses Home Assistant's ESPHome protocol instead of Wyoming.
   Tellingly, Linux Voice Assistant's own docs list "media player" as a
-  *new* capability over wyoming-satellite (a `--music-output-device` flag
+  _new_ capability over wyoming-satellite (a `--music-output-device` flag
   backed by `mpv`, exposed as a proper Home Assistant `media_player`
   entity) — confirming Wyoming's own `wyoming.snd` primitive (piping
   `AudioChunk` events into a `--snd-command` like `aplay`) was only ever
@@ -791,13 +679,12 @@ signalk-jukebox/
   entirely in favor of Fusion-Link only, without affecting any other
   component (it sits behind the same adapter boundary as Fusion-Link,
   §2.3).
-- **Android-equivalent casting** (SPEC.md §1.4, §10.2) — Chromecast,
-  Bluetooth A2DP, or DLNA/UPnP would each need their own adapter
-  alongside `src/airplay/`; whichever is chosen should confirm its own
-  stream type is covered by the same Snapserver `sandbox_dir` mechanism
-  AirPlay relies on (§5) — if it needs a _different_ Snapcast stream type
-  than `process`/`pipe`/etc., that's a fresh compatibility question, not
-  something to assume solved by AirPlay's precedent.
+- **Casting from a phone** (AirPlay, Chromecast, Bluetooth A2DP, or
+  DLNA/UPnP — SPEC.md §1.4, §10.2) — AirPlay was implemented and later
+  removed (SPEC.md §12) after an unresolved live-network/timing issue
+  made it unreliable; any future attempt (AirPlay or otherwise) would
+  need its own adapter and should budget time for that same class of
+  live-network debugging, not just protocol/stream-type integration.
 - **A real address-claiming Fusion device, if best-effort proves
   insufficient** (SPEC.md §12, §13) — if testing against real MFD
   hardware shows the current approach doesn't work well enough, the
@@ -806,10 +693,6 @@ signalk-jukebox/
   SignalK as a piped provider rather than embedded in this plugin's own
   process — a meaningfully bigger scope change, not a tweak, so worth
   treating as a distinct future decision rather than pre-building for it.
-- **AirPlay PIN pairing** (§6 above) — currently open by default; could
-  become a per-zone or boat-wide config toggle if unauthenticated
-  receivers prove to be a real problem in practice rather than a
-  theoretical one.
 - **Auto-detecting the `satelliteZoneMap` correlation** (SPEC.md §13) —
   MVP's mapping is manual/opt-in; an auto-detection heuristic would need
   designing jointly with signalk-wyoming, not attempted unilaterally.

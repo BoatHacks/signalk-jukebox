@@ -7,7 +7,6 @@ import {
   createManagedContainer,
   MOPIDY_PORT,
   SNAPCAST_CONTROL_PORT,
-  HOST_NETWORKING_ADDRESS,
 } from "./container.js";
 import { StateStore, createInitialState } from "./state/store.js";
 import {
@@ -72,7 +71,7 @@ import {
 // (signalk-container-helper README "Quick start: a managed container").
 // See ARCHITECTURE.md §1-§2 for the full component breakdown; this file is
 // mostly wiring -- the real logic lives in state/store.ts,
-// container.ts, mopidy-client.ts, snapserver-client.ts, n2k/*, airplay/*.
+// container.ts, mopidy-client.ts, snapserver-client.ts, n2k/*.
 
 interface App
   extends
@@ -105,7 +104,6 @@ export default function plugin(app: App) {
   let stopZonePutHandlers: (() => void) | null = null;
   let stopLocalSnapclientRename: (() => void) | null = null;
   let stopPlaybackSync: (() => void) | null = null;
-  let fusionAdapter: FusionAdapter | null = null;
   let stopFusionBroadcast: (() => void) | null = null;
   let fusionRefreshTimer: NodeJS.Timeout | null = null;
   let stopFusionIncoming: (() => void) | null = null;
@@ -221,35 +219,17 @@ export default function plugin(app: App) {
           };
         }
 
-        const selfName = app.getSelfPath("name");
-        const boatName =
-          typeof selfName === "string" && selfName.length > 0
-            ? selfName
-            : "Boat";
-
         container = createManagedContainer({
           app,
           settings,
           libraryMount,
           dataMount,
-          boatName,
         });
         if (pendingRouter) {
           finishRouterRegistration(pendingRouter);
           pendingRouter = null;
         }
-        const { address: resolvedAddress } = await container.start(
-          settings.imageTag,
-        );
-        // Under host networking, container.ts omits `readiness` entirely
-        // (its own address resolution can't work there -- see that file's
-        // doc comment), so `resolvedAddress` is always null in that mode.
-        // Substitute the deterministic address instead: sharing the
-        // host's network namespace means Mopidy's port simply IS this
-        // host's own port, nothing to resolve.
-        const address = settings.airplay.hostNetworking
-          ? HOST_NETWORKING_ADDRESS
-          : resolvedAddress;
+        const { address } = await container.start(settings.imageTag);
         proxyState.address = address;
 
         // Snapserver's control port is published loopback-only
@@ -331,10 +311,6 @@ export default function plugin(app: App) {
           );
         }
 
-        // address is non-null here either way: readiness resolves one when
-        // configured (the normal case), and HOST_NETWORKING_ADDRESS is a
-        // fixed literal otherwise -- guarded anyway since the type is
-        // nullable.
         if (address) {
           mopidyState.client = new MopidyClient({ baseUrl: address });
           stopPlaybackControls = registerPlaybackControls(
@@ -354,7 +330,6 @@ export default function plugin(app: App) {
             deviceName: settings.n2k.deviceName,
             app,
           });
-          fusionAdapter = adapter;
 
           const broadcast = () => {
             adapter.broadcastState(store.getPlayback(), store.getZones());
@@ -485,7 +460,6 @@ export default function plugin(app: App) {
       stopFusionIncoming = null;
       if (fusionRefreshTimer) clearInterval(fusionRefreshTimer);
       fusionRefreshTimer = null;
-      fusionAdapter = null;
       store.setN2kDeviceState("unclaimed");
       snapserverState.client = null;
       mopidyState.client = null;
@@ -583,28 +557,6 @@ export default function plugin(app: App) {
             },
             deviceName: { type: "string", default: "Jukebox" },
             deviceInstance: { type: "number", default: 0 },
-          },
-        },
-        airplay: {
-          type: "object",
-          properties: {
-            enabled: {
-              type: "boolean",
-              default: true,
-              title: "Enable the AirPlay input",
-            },
-            namePattern: {
-              type: "string",
-              default: "{boatName} - {zoneName}",
-              title:
-                'mDNS-advertised name ({zoneName} always resolves to "AirPlay" -- there is one shared input, not one per zone)',
-            },
-            hostNetworking: {
-              type: "boolean",
-              default: false,
-              title:
-                "Run container with host networking (required for AirPlay discovery -- see the config panel for details)",
-            },
           },
         },
         vhf: {

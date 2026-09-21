@@ -4,17 +4,12 @@ import {
   type ContainerConfig,
 } from "signalk-container-helper";
 import type { PluginSettings } from "./types.js";
-import { receiverName } from "./airplay/receiver.js";
 
 // The custom signalk-jukebox container image (ARCHITECTURE.md §2.4): Mopidy
 // + Mopidy-MusicBox-Webclient + Snapserver in one image, built from
 // image/Dockerfile (build-tested; see that file's header for why Mopidy-Iris
 // isn't used -- incompatible with the Mopidy 4.x this image needs, and for
-// why Mopidy-MusicBox-Webclient needs a setuptools<80 pin). A single
-// AirPlay input is statically declared in snapserver.conf.template
-// (SPEC.md §6.4, revised) -- JUKEBOX_AIRPLAY_ENABLED/
-// JUKEBOX_AIRPLAY_DEVICENAME below are entrypoint.sh's envsubst inputs
-// for it, not a runtime Stream.AddStream call.
+// why Mopidy-MusicBox-Webclient needs a setuptools<80 pin).
 //
 // Published (ARCHITECTURE.md §8): ghcr.io/boathacks/signalk-jukebox:latest,
 // public visibility. Also tagged with the exact npm package version on
@@ -44,19 +39,6 @@ export const SNAPWEB_PORT = 1780;
  * Snapcast's own real default port for this source type. */
 export const ALERTS_PORT = 4953;
 export const ALERTS_STREAM_ID = "Alerts";
-/** A single, statically-declared AirPlay input (snapserver.conf.template's
- * `source = airplay://...` line) -- not per-zone (SPEC.md §6.4, revised):
- * a zone is pointed at it manually (src/routes.ts's /source endpoint,
- * like Alerts/Silence), and it's also folded into MusicAndAlerts as a
- * third auto-ducking input, priority Alerts > AirPlay > MopidyOnly. */
-export const AIRPLAY_STREAM_ID = "AirPlay";
-
-/** The container's address once `airplay.hostNetworking` is on: sharing
- * the host's network namespace directly means Mopidy's port literally
- * IS this host's own port, with no podman/docker translation to resolve
- * -- see createManagedContainer's own doc comment for why this can't go
- * through signalk-container-helper's normal address resolution. */
-export const HOST_NETWORKING_ADDRESS = `http://127.0.0.1:${MOPIDY_PORT}`;
 
 export interface CreateManagedContainerArgs {
   app: ManagedContainerOptions["app"];
@@ -76,11 +58,6 @@ export interface CreateManagedContainerArgs {
    * container recreate (not just a plain restart of the same container),
    * as was Mopidy's own Spotify auth cache and library scan cache. */
   dataMount?: { source: string; containerPath: string };
-  /** SignalK vessel name (app.getSelfPath("name")), prefixed onto the
-   * AirPlay input's mDNS-advertised name (settings.airplay.namePattern) --
-   * distinguishes this boat's AirPlay input from any other boat's at the
-   * same marina. Falls back to "Boat" if unset. */
-  boatName?: string;
 }
 
 /** Full ContainerConfig for a tag (pure -- unit-tested directly, same
@@ -90,9 +67,7 @@ export function buildJukeboxConfig(
   settings: PluginSettings,
   libraryMount?: { source: string; containerPath: string },
   dataMount?: { source: string; containerPath: string },
-  boatName = "Boat",
 ): ContainerConfig {
-  const hostNetworking = settings.airplay.hostNetworking;
   return {
     image: JUKEBOX_IMAGE,
     tag,
@@ -106,18 +81,7 @@ export function buildJukeboxConfig(
     // It's deliberately NOT how the web client itself is reached: see the
     // `ports` entry below instead, a second, independent, FIXED-host-port
     // binding of the same container port for that.
-    //
-    // Omitted entirely under host networking: confirmed against a real
-    // production instance that signalk-container discards `networkMode`
-    // outright the moment `signalkAccessiblePorts` is also set (its own
-    // warning: "signalkAccessiblePorts and networkMode are both set --
-    // 'host' will be discarded") -- silently falling back to bridge
-    // mode. That meant this container was ALWAYS running in bridge
-    // mode even with `airplay.hostNetworking` turned on, while `ports`
-    // below was ALSO omitted (since the code assumed host networking
-    // was actually applying) -- neither mechanism ever actually
-    // published anything, breaking Snapcast connectivity entirely.
-    signalkAccessiblePorts: hostNetworking ? undefined : [MOPIDY_PORT],
+    signalkAccessiblePorts: [MOPIDY_PORT],
     // Real LAN-facing publishing (SPEC.md §6, security note): the
     // stream port is bound to every interface so physical Snapclients
     // elsewhere on the boat LAN can actually reach it -- confirmed by
@@ -155,29 +119,13 @@ export function buildJukeboxConfig(
     // containers/processes wanting to stream an announcement in (its own
     // comment, and SNAPWEB_PORT's above, cover why Snapcast's ports have
     // no auth to lose either way).
-    // `ports` is ignored once `networkMode` is set (signalk-container-
-    // helper's own type docs), so only declare it when NOT using host
-    // networking; under host networking every port here is already the
-    // host's own port with no publishing needed at all.
-    ports: hostNetworking
-      ? undefined
-      : {
-          [`${SNAPCAST_STREAM_PORT}/tcp`]: `0.0.0.0:${SNAPCAST_STREAM_PORT}`,
-          [`${SNAPCAST_CONTROL_PORT}/tcp`]: `127.0.0.1:${SNAPCAST_CONTROL_PORT}`,
-          [`${SNAPWEB_PORT}/tcp`]: `0.0.0.0:${SNAPWEB_PORT}`,
-          [`${ALERTS_PORT}/tcp`]: `0.0.0.0:${ALERTS_PORT}`,
-          [`${MOPIDY_PORT}/tcp`]: `0.0.0.0:${MOPIDY_PORT}`,
-        },
-    // AirPlay discovery (mDNS) and each per-zone receiver's own
-    // dynamically-chosen RTSP/RTP ports don't traverse the bridge/NAT
-    // boundary the container otherwise runs under, and there's no fixed
-    // port list to publish the way Snapcast's stream port can be, since
-    // shairport-sync instances are created per zone on demand (§6.4) --
-    // confirmed by build-testing. Host networking removes that boundary
-    // entirely, at the cost of sharing the host's network namespace and
-    // port space with every other process on it. Opt-in
-    // (`airplay.hostNetworking`, §9), default off.
-    networkMode: hostNetworking ? "host" : undefined,
+    ports: {
+      [`${SNAPCAST_STREAM_PORT}/tcp`]: `0.0.0.0:${SNAPCAST_STREAM_PORT}`,
+      [`${SNAPCAST_CONTROL_PORT}/tcp`]: `127.0.0.1:${SNAPCAST_CONTROL_PORT}`,
+      [`${SNAPWEB_PORT}/tcp`]: `0.0.0.0:${SNAPWEB_PORT}`,
+      [`${ALERTS_PORT}/tcp`]: `0.0.0.0:${ALERTS_PORT}`,
+      [`${MOPIDY_PORT}/tcp`]: `0.0.0.0:${MOPIDY_PORT}`,
+    },
     env: {
       JUKEBOX_LOCAL_ENABLED: String(settings.backends.local.enabled),
       JUKEBOX_RADIO_ENABLED: String(settings.backends.radio.enabled),
@@ -187,15 +135,6 @@ export function buildJukeboxConfig(
       JUKEBOX_SPOTIFY_CLIENT_ID: settings.backends.spotify.clientId ?? "",
       JUKEBOX_SPOTIFY_CLIENT_SECRET:
         settings.backends.spotify.clientSecret ?? "",
-      JUKEBOX_AIRPLAY_ENABLED: String(settings.airplay.enabled),
-      // Pre-encoded here, not left to entrypoint.sh's envsubst: a raw
-      // space in the rendered snapserver.conf.template line would break
-      // that `airplay://...?devicename=...` URI's own query-string
-      // parsing (confirmed live -- see receiver.ts's own history of this
-      // exact bug for the per-zone design this superseded).
-      JUKEBOX_AIRPLAY_DEVICENAME: encodeURIComponent(
-        receiverName(settings.airplay.namePattern, boatName, "AirPlay"),
-      ),
     },
     volumes:
       libraryMount || dataMount
@@ -219,9 +158,7 @@ export function createManagedContainer({
   settings,
   libraryMount,
   dataMount,
-  boatName,
 }: CreateManagedContainerArgs): ManagedContainer {
-  const hostNetworking = settings.airplay.hostNetworking;
   return new ManagedContainer({
     app,
     pluginId: "signalk-jukebox",
@@ -249,7 +186,7 @@ export function createManagedContainer({
     // absent case (CI, or a misconfigured install).
     managerTimeoutMs: 20_000,
     buildConfig: (tag) =>
-      buildJukeboxConfig(tag, settings, libraryMount, dataMount, boatName),
+      buildJukeboxConfig(tag, settings, libraryMount, dataMount),
     // Confirmed by build-testing (devpod): /mopidy/rpc is POST-only
     // JSON-RPC and returns 405 to a plain GET, which is what
     // signalk-container-helper's readiness prober sends -- using it here
@@ -261,22 +198,6 @@ export function createManagedContainer({
     // "/musicbox_webclient/" path, which 301-redirects to it; confirmed
     // by build-testing that the redirect target itself, not the
     // redirect, is what actually returns 200).
-    //
-    // Omitted entirely under host networking: ManagedContainer's own
-    // address resolution (resolveAddress, signalk-container-helper's
-    // internals) needs either `signalkAccessiblePorts` or a parseable
-    // published-port entry from listContainers() -- neither exists once
-    // this container actually shares the host's network namespace (there
-    // is nothing "published"; the process just binds the real host port
-    // directly). Confirmed: with `signalkAccessiblePorts` omitted above,
-    // readiness's own resolveAddress would return null and
-    // container.start() would reject outright ("address-unresolved"),
-    // taking the whole plugin down. index.ts instead uses the always-true
-    // HOST_NETWORKING_ADDRESS directly in this mode -- deterministic,
-    // since sharing the host's network stack means Mopidy's port simply
-    // IS this host's own port, nothing to resolve.
-    readiness: hostNetworking
-      ? undefined
-      : { port: MOPIDY_PORT, path: "/musicbox_webclient/index.html" },
+    readiness: { port: MOPIDY_PORT, path: "/musicbox_webclient/index.html" },
   });
 }

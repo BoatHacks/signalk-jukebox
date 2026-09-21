@@ -65,7 +65,7 @@ const zone: Zone = {
   connected: true,
   volume: 50,
   muted: false,
-  activeSource: "airplay",
+  activeSource: "jukebox",
 };
 
 describe("POST /api/zones/:id/source", () => {
@@ -81,7 +81,9 @@ describe("POST /api/zones/:id/source", () => {
     });
 
     const res = fakeRes();
-    await callPost(posts, "/api/zones/:id/source", 
+    await callPost(
+      posts,
+      "/api/zones/:id/source",
       { params: { id: "zone-1" }, body: { source: "jukebox" } },
       res,
     );
@@ -103,7 +105,9 @@ describe("POST /api/zones/:id/source", () => {
     });
 
     const res = fakeRes();
-    await callPost(posts, "/api/zones/:id/source", 
+    await callPost(
+      posts,
+      "/api/zones/:id/source",
       { params: { id: "zone-1" }, body: { source: "alerts" } },
       res,
     );
@@ -125,7 +129,9 @@ describe("POST /api/zones/:id/source", () => {
     });
 
     const res = fakeRes();
-    await callPost(posts, "/api/zones/:id/source", 
+    await callPost(
+      posts,
+      "/api/zones/:id/source",
       { params: { id: "zone-1" }, body: { source: "silence" } },
       res,
     );
@@ -135,31 +141,7 @@ describe("POST /api/zones/:id/source", () => {
     expect(store.getZone("zone-1")?.activeSource).toBe("silence");
   });
 
-  it("switches a zone to the airplay stream", async () => {
-    const store = makeStore({ ...zone, activeSource: "jukebox" });
-    const setGroupStream = vi.fn().mockResolvedValue(undefined);
-    const { router, posts } = fakeRouter();
-    registerRoutes({
-      router,
-      store,
-      snapserver: { client: { setGroupStream } as unknown as SnapserverClient },
-      app: { getSelfPath: () => undefined },
-    });
-
-    const res = fakeRes();
-    await callPost(
-      posts,
-      "/api/zones/:id/source",
-      { params: { id: "zone-1" }, body: { source: "airplay" } },
-      res,
-    );
-
-    expect(setGroupStream).toHaveBeenCalledWith("group-1", "AirPlay");
-    expect(res.body).toEqual({ ok: true });
-    expect(store.getZone("zone-1")?.activeSource).toBe("airplay");
-  });
-
-  it("rejects a source other than jukebox/alerts/silence/airplay", async () => {
+  it("rejects a source other than jukebox/alerts/silence", async () => {
     const store = makeStore(zone);
     const setGroupStream = vi.fn();
     const { router, posts } = fakeRouter();
@@ -193,7 +175,9 @@ describe("POST /api/zones/:id/source", () => {
     });
 
     const res = fakeRes();
-    callPost(posts, "/api/zones/:id/source", 
+    callPost(
+      posts,
+      "/api/zones/:id/source",
       { params: { id: "does-not-exist" }, body: { source: "jukebox" } },
       res,
     );
@@ -212,7 +196,9 @@ describe("POST /api/zones/:id/source", () => {
     });
 
     const res = fakeRes();
-    callPost(posts, "/api/zones/:id/source", 
+    callPost(
+      posts,
+      "/api/zones/:id/source",
       { params: { id: "zone-1" }, body: { source: "jukebox" } },
       res,
     );
@@ -234,7 +220,12 @@ describe("POST /api/zones/:id/delete", () => {
     });
 
     const res = fakeRes();
-    await callPost(posts, "/api/zones/:id/delete", { params: { id: "zone-1" } }, res);
+    await callPost(
+      posts,
+      "/api/zones/:id/delete",
+      { params: { id: "zone-1" } },
+      res,
+    );
 
     expect(deleteClient).toHaveBeenCalledWith("zone-1");
     expect(res.body).toEqual({ ok: true });
@@ -253,7 +244,12 @@ describe("POST /api/zones/:id/delete", () => {
     });
 
     const res = fakeRes();
-    await callPost(posts, "/api/zones/:id/delete", { params: { id: "zone-1" } }, res);
+    await callPost(
+      posts,
+      "/api/zones/:id/delete",
+      { params: { id: "zone-1" } },
+      res,
+    );
 
     expect(res.statusCode).toBe(409);
     expect(deleteClient).not.toHaveBeenCalled();
@@ -271,7 +267,9 @@ describe("POST /api/zones/:id/delete", () => {
     });
 
     const res = fakeRes();
-    await callPost(posts, "/api/zones/:id/delete", 
+    await callPost(
+      posts,
+      "/api/zones/:id/delete",
       { params: { id: "does-not-exist" } },
       res,
     );
@@ -290,7 +288,12 @@ describe("POST /api/zones/:id/delete", () => {
     });
 
     const res = fakeRes();
-    await callPost(posts, "/api/zones/:id/delete", { params: { id: "zone-1" } }, res);
+    await callPost(
+      posts,
+      "/api/zones/:id/delete",
+      { params: { id: "zone-1" } },
+      res,
+    );
 
     expect(res.statusCode).toBe(503);
   });

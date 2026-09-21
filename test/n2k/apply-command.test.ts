@@ -14,7 +14,8 @@ function fakeMopidy(): MopidyClient & Record<string, ReturnType<typeof vi.fn>> {
   } as unknown as MopidyClient & Record<string, ReturnType<typeof vi.fn>>;
 }
 
-function fakeSnapserver(): SnapserverClient & Record<string, ReturnType<typeof vi.fn>> {
+function fakeSnapserver(): SnapserverClient &
+  Record<string, ReturnType<typeof vi.fn>> {
   return {
     setClientVolume: vi.fn().mockResolvedValue(undefined),
   } as unknown as SnapserverClient & Record<string, ReturnType<typeof vi.fn>>;
@@ -43,7 +44,13 @@ describe("applyFusionCommand", () => {
 
     await applyFusionCommand(
       { type: "play" },
-      { mopidy: null, snapserver: null, store, onError, onRequestStatus: vi.fn() },
+      {
+        mopidy: null,
+        snapserver: null,
+        store,
+        onError,
+        onRequestStatus: vi.fn(),
+      },
     );
 
     expect(onError).not.toHaveBeenCalled();
@@ -65,10 +72,20 @@ describe("applyFusionCommand", () => {
 
     await applyFusionCommand(
       { type: "zoneVolume", n2kZone: 2, volume: 77 },
-      { mopidy: null, snapserver, store, onError: vi.fn(), onRequestStatus: vi.fn() },
+      {
+        mopidy: null,
+        snapserver,
+        store,
+        onError: vi.fn(),
+        onRequestStatus: vi.fn(),
+      },
     );
 
-    expect(snapserver.setClientVolume).toHaveBeenCalledWith("zone-a", 77, false);
+    expect(snapserver.setClientVolume).toHaveBeenCalledWith(
+      "zone-a",
+      77,
+      false,
+    );
     expect(store.getZone("zone-a")?.volume).toBe(77);
   });
 
@@ -88,10 +105,20 @@ describe("applyFusionCommand", () => {
 
     await applyFusionCommand(
       { type: "zoneVolume", n2kZone: 0, volume: 150.6 },
-      { mopidy: null, snapserver, store, onError: vi.fn(), onRequestStatus: vi.fn() },
+      {
+        mopidy: null,
+        snapserver,
+        store,
+        onError: vi.fn(),
+        onRequestStatus: vi.fn(),
+      },
     );
 
-    expect(snapserver.setClientVolume).toHaveBeenCalledWith("zone-a", 100, false);
+    expect(snapserver.setClientVolume).toHaveBeenCalledWith(
+      "zone-a",
+      100,
+      false,
+    );
   });
 
   it("is a no-op for zoneVolume when no zone claims that n2kZone", async () => {
@@ -100,7 +127,13 @@ describe("applyFusionCommand", () => {
 
     await applyFusionCommand(
       { type: "zoneVolume", n2kZone: 3, volume: 50 },
-      { mopidy: null, snapserver, store, onError: vi.fn(), onRequestStatus: vi.fn() },
+      {
+        mopidy: null,
+        snapserver,
+        store,
+        onError: vi.fn(),
+        onRequestStatus: vi.fn(),
+      },
     );
 
     expect(snapserver.setClientVolume).not.toHaveBeenCalled();
@@ -112,7 +145,13 @@ describe("applyFusionCommand", () => {
 
     await applyFusionCommand(
       { type: "masterMute", muted: true },
-      { mopidy, snapserver: null, store, onError: vi.fn(), onRequestStatus: vi.fn() },
+      {
+        mopidy,
+        snapserver: null,
+        store,
+        onError: vi.fn(),
+        onRequestStatus: vi.fn(),
+      },
     );
 
     expect(mopidy.setMute).toHaveBeenCalledWith(true);
@@ -137,7 +176,9 @@ describe("applyFusionCommand", () => {
 
   it("reports a backend failure via onError, rather than throwing", async () => {
     const mopidy = fakeMopidy();
-    (mopidy.play as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("connection refused"));
+    (mopidy.play as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error("connection refused"),
+    );
     const store = new StateStore(createInitialState());
     const onError = vi.fn();
 
@@ -146,6 +187,8 @@ describe("applyFusionCommand", () => {
       { mopidy, snapserver: null, store, onError, onRequestStatus: vi.fn() },
     );
 
-    expect(onError).toHaveBeenCalledWith(expect.stringContaining("connection refused"));
+    expect(onError).toHaveBeenCalledWith(
+      expect.stringContaining("connection refused"),
+    );
   });
 });

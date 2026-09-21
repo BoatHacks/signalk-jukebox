@@ -58,8 +58,6 @@ const BROADCAST_DST = 255;
 const SOURCE_ID = 0;
 const SOURCE_NAME = "Jukebox";
 
-const AIRPLAY_PLACEHOLDER_TRACK = "AirPlay Active";
-
 /** How often index.ts re-broadcasts current state even with nothing
  * changed (SPEC.md §6.3: "so a device joining the bus mid-session still
  * gets current state without waiting for the next change") -- on top of,
@@ -122,30 +120,14 @@ export type FusionIncomingCommand =
    * served more directly here). */
   | { type: "requestStatus" };
 
-function resolveDisplayedTrack(
-  playback: PlaybackState,
-  n2kZones: Zone[],
-): { title: string; artist?: string; album?: string } {
+function resolveDisplayedTrack(playback: PlaybackState): {
+  title: string;
+  artist?: string;
+  album?: string;
+} {
   // SPEC.md §6.3: Fusion-Link's now-playing fields are device-wide, keyed
-  // by sourceId, never by zone -- there is no per-zone track message. If
-  // any N2K-zoned zone is actually playing someone's AirPlay session
-  // rather than the jukebox, broadcasting Mopidy's own track would show
-  // something flatly false, so that zone's real track wins instead.
-  // Tie-break for more than one simultaneous AirPlay zone: lowest n2kZone
-  // number (deterministic, consistent with zone numbering being the
-  // stable identity used throughout this plugin).
-  const airplayZones = n2kZones
-    .filter((z) => z.activeSource === "airplay")
-    .sort((a, b) => (a.n2kZone ?? 0) - (b.n2kZone ?? 0));
-
-  const lowestAirplayZone = airplayZones[0];
-  if (lowestAirplayZone) {
-    const track = lowestAirplayZone.airplay?.track;
-    return track
-      ? { title: track.title, artist: track.artist, album: track.album }
-      : { title: AIRPLAY_PLACEHOLDER_TRACK };
-  }
-
+  // by sourceId, never by zone -- there is no per-zone track message, so
+  // this is always just Mopidy's own current track.
   return {
     title: playback.track?.name || "",
     artist: playback.track?.artist,
@@ -184,7 +166,7 @@ export class FusionAdapter {
       ),
     );
 
-    const track = resolveDisplayedTrack(playback, n2kZones);
+    const track = resolveDisplayedTrack(playback);
     this.send(
       new PGN_130820_FusionTrackName(
         { sourceId: SOURCE_ID, track: track.title },
@@ -210,7 +192,11 @@ export class FusionAdapter {
 
     this.send(
       new PGN_130820_FusionMute(
-        { mute: playback.muted ? FusionMuteCommand.MuteOn : FusionMuteCommand.MuteOff },
+        {
+          mute: playback.muted
+            ? FusionMuteCommand.MuteOn
+            : FusionMuteCommand.MuteOff,
+        },
         BROADCAST_DST,
       ),
     );
@@ -267,7 +253,9 @@ export class FusionAdapter {
     if (PGN_126720_FusionSetZoneVolume.isMatch(pgn as never)) {
       const fields = (pgn as PGN_126720_FusionSetZoneVolume).fields;
       if (fields.zone === undefined || fields.volume === undefined) return [];
-      return [{ type: "zoneVolume", n2kZone: fields.zone, volume: fields.volume }];
+      return [
+        { type: "zoneVolume", n2kZone: fields.zone, volume: fields.volume },
+      ];
     }
 
     if (PGN_126720_FusionSetAllVolumes.isMatch(pgn as never)) {
@@ -289,8 +277,10 @@ export class FusionAdapter {
 
     if (PGN_126720_FusionSetMute.isMatch(pgn as never)) {
       const command = (pgn as PGN_126720_FusionSetMute).fields.command;
-      if (command === FusionMuteCommand.MuteOn) return [{ type: "masterMute", muted: true }];
-      if (command === FusionMuteCommand.MuteOff) return [{ type: "masterMute", muted: false }];
+      if (command === FusionMuteCommand.MuteOn)
+        return [{ type: "masterMute", muted: true }];
+      if (command === FusionMuteCommand.MuteOff)
+        return [{ type: "masterMute", muted: false }];
       return [];
     }
 

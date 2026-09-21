@@ -19,15 +19,6 @@ audio to speaker zones around the boat (cockpit, salon, cabin) via
 [Snapcast](https://github.com/snapcast/snapcast), with synchronized playback
 and independent per-zone volume/mute.
 
-Crew and guests must also be able to play audio straight from their own
-phone onto the boat's speakers, the way AirPlay works on a home stereo —
-scoped to whichever zone they're near, not the whole boat. Each zone
-dynamically gets its own AirPlay receiver, discoverable by name (e.g.
-"Jukebox - Cockpit"), so anyone can AirPlay to the cockpit speakers
-specifically without a companion app or manual pairing. An Android-
-equivalent casting target (Chromecast/Bluetooth/DLNA — undecided, §13)
-is a deferred, not abandoned, follow-on (§10.2).
-
 Playback must also be controllable from hardware already on many boats:
 NMEA2000 stereo head units and Fusion-Link-aware chartplotters (Garmin
 MFDs in particular). signalk-jukebox emulates a Fusion stereo on the N2K
@@ -95,19 +86,14 @@ Questions).
 - **Canonical state** — the single in-plugin source of truth for playback
   and zone state that every interface (Mopidy, N2K/Fusion, REST, SK paths)
   reads from and writes to (§3, §12).
-- **AirPlay receiver** — a Snapcast `airplay`-type stream created
-  on-demand for one zone the moment it connects, and removed the moment
-  it disconnects (§2, §6.4). No pool, no slot numbering, no persisted
-  assignment — unlike `n2kZone` (below), a zone's AirPlay receiver has no
-  identity that needs to survive across connects.
-- **Active source** — which audio feed (the Jukebox/Mopidy stream, or
-  that zone's own AirPlay receiver) a given zone's Snapclient group is
-  currently attached to. Distinct from _master_ playback state, which
-  is Mopidy-specific (§4).
+- **Active source** — which audio feed (the Jukebox stream, the Alerts
+  stream, or Silence) a given zone's Snapclient group is currently
+  attached to. Distinct from _master_ playback state, which is
+  Mopidy-specific (§4).
 - **Duck trigger** — a SignalK delta path signalk-jukebox subscribes to
   (published by another plugin, not this one) that automatically pauses
   or lowers playback volume while active, and restores it afterward
-  (§2, §6.5). Entirely optional — a duck trigger whose source path never
+  (§2, §6.4). Entirely optional — a duck trigger whose source path never
   appears (the other plugin isn't installed) simply never fires; this
   plugin has no hard dependency on either one existing.
 
@@ -122,7 +108,7 @@ Questions).
   for voice) — documented as a future interop question (§13), not built.
 - Synthesizing, routing, or playing announcement audio itself — that
   remains entirely signalk-wyoming's domain. This plugin only reacts to
-  signalk-wyoming's published state to duck its own playback (§2, §6.5);
+  signalk-wyoming's published state to duck its own playback (§2, §6.4);
   it never touches announcement audio.
 - Multi-user accounts, playlists-per-user, or any per-crew-member
   personalization — one shared jukebox per boat.
@@ -141,11 +127,10 @@ Questions).
   plugin is not a fully bus-recognized "device," it broadcasts under an
   existing one — is accepted as a known limitation, not solved (§6.3,
   §13).
-- **Android-equivalent casting** — deferred, not rejected (§10.2, §13).
-  Chromecast, Bluetooth A2DP, and DLNA/UPnP are all real candidates with
-  different tradeoffs (mature receiver software, hardware passthrough
-  needs, and discoverability all differ); revisit once AirPlay's
-  per-zone model is proven out.
+- **AirPlay / casting from a phone** — was implemented and later removed
+  (§12); a real, unresolved live-network/timing issue (intermittent
+  static/clipping during real AirPlay playback) made it unreliable enough
+  to ship. Out of scope again unless revisited.
 
 ## 2. Domain Rules — Backend & Zone Behavior
 
@@ -209,23 +194,6 @@ Questions).
   satellites union their target zone sets. Configuring the mapping is
   optional and manual (§13) — there's no auto-detection of which
   Snapclient physically sits with which satellite.
-- **Every zone gets its own AirPlay receiver, created the moment it
-  connects and removed the moment it disconnects (§6.4).** Confirmed via
-  research (§13) that Snapcast ≥ 0.33.0's control API can both create and
-  cleanly remove `airplay`-type streams at runtime — the earlier belief
-  that this was blocked was version-specific, not a permanent Snapcast
-  property, and this plugin pins its own Snapserver version so requiring
-  ≥ 0.33.0 costs nothing. No pool, no cap, no persisted slot assignment:
-  a zone's receiver is created with the zone's real name from the start.
-  This is per-zone, not boat-wide — someone can AirPlay to the cockpit
-  specifically while the salon keeps playing the Mopidy queue.
-- **An active AirPlay session on a zone takes over that zone's audio,
-  replacing whatever the Jukebox source was sending it**, for as long as
-  the session is connected; when it ends, the zone reverts to whatever
-  the Jukebox source (Mopidy) is currently playing. This mirrors how a
-  real AirPlay-receiving stereo behaves — the incoming AirPlay stream
-  simply becomes what plays, no explicit "switch back" step needed.
-  Other zones are unaffected by one zone's AirPlay session.
 
 ## 3. State / Lifecycle Model
 
@@ -242,8 +210,8 @@ to this plugin:
   has successfully claimed an NMEA2000 source address for its emulated
   Fusion device (ARCHITECTURE.md §2, SPEC.md §13). Only meaningful when
   the N2K/Fusion interface is enabled (§9).
-- **Zone active source**: `jukebox | airplay` per zone — which feed that
-  zone's Snapclient group is currently attached to (§2).
+- **Zone active source**: `jukebox | alerts | silence` per zone — which
+  feed that zone's Snapclient group is currently attached to (§2).
 
 ### 3.2 Transitions
 
@@ -270,14 +238,11 @@ the canonical state store (§4, ARCHITECTURE.md §2), and any adapter
   volume/mute, like playback, can be written from any interface (Iris/
   REST/N2K) and is applied to Snapserver, then confirmed back into
   canonical state.
-- **Zone active source transitions are driven by AirPlay connect/
-  disconnect events on that zone's claimed AirPlay slot** (§6.4), not by
-  any explicit "switch source" command from another interface in MVP —
-  connecting is the switch. Snapserver reports which stream a group is
-  attached to, so the plugin's Snapserver adapter can detect the
-  transition and reflect it into canonical state (and, if the N2K/Fusion
-  interface is enabled and the zone has an `n2kZone`, broadcast it per
-  §6.3's now-playing selection logic).
+- **Zone active source transitions are driven by explicit "switch
+  source" commands from another interface** (REST, §6.1) — a zone stays
+  on whatever source it was last switched to until switched again.
+  Snapserver reports which stream a group is attached to, so the
+  plugin's Snapserver adapter reflects it into canonical state.
 
 ## 4. Data Model
 
@@ -292,18 +257,11 @@ copy.
   (§3.2). `volume`/`muted` here are the _master_ volume (pre-zone), used
   for Fusion-Link's own volume model (§6.3); per-zone volume is separate
   (`Zone.volume` below).
-- **Zone** — `{ id, name, connected: boolean, volume: number (0-100), muted: boolean, n2kZone?: number, activeSource: 'jukebox'|'alerts'|'airplay', airplay?: { streamName, connected: boolean, track?: { title, artist?, album? } } }`
+- **Zone** — `{ id, name, connected: boolean, volume: number (0-100), muted: boolean, n2kZone?: number, activeSource: 'jukebox'|'alerts'|'silence' }`
   — `id` is the Snapclient's Snapcast-assigned id; `name` is whatever the
   Snapclient reports (typically its hostname) unless overridden. `n2kZone`
   (0–3) is present only for zones assigned an N2K/Fusion slot (§2, §8);
-  absent for zones beyond the protocol's zone count. `airplay.streamName`
-  is the mDNS name that zone's receiver advertises (e.g. "Jukebox -
-  Cockpit", §9); `airplay.connected` reflects whether a device currently
-  has an active AirPlay session to it; `airplay.track` is real
-  title/artist/album read from that zone's `shairport-sync` **metadata
-  pipe** (§6.4) — absent until the sending device/app pushes metadata
-  (not universal — depends on the AirPlay source — and can lag session
-  start), not an error condition.
+  absent for zones beyond the protocol's zone count.
 - **QueueSnapshot** (plugin-managed persistence, see §8) — the serialized
   Mopidy tracklist + current track index + position, snapshotted
   periodically and on clean `stop()`, restored on the next container
@@ -312,14 +270,12 @@ copy.
   Snapclient-id → `{ n2kZone?: number }` mapping (§2), independent of
   whether that Snapclient is currently connected. Assigned once, the
   first time a Snapclient is seen, and never reassigned automatically
-  thereafter. (AirPlay no longer needs an entry here — §6.4, §12 — since
-  a zone's AirPlay receiver is created/removed on demand rather than
-  claiming a persisted slot.)
+  thereafter.
 - **DuckState** (plugin-internal, not persisted — §8) — `{ pausedByVhf: boolean, activeDucksBySatellite: Record<satelliteId, zoneId[]>, preDuckZoneVolumes: Record<zoneId, number> }`.
   `pausedByVhf` is what makes the VHF auto-resume rule (§2) not fight a
   manual pause; `activeDucksBySatellite` tracks which satellite(s) are
   currently ducking which zones, so a zone targeted by two overlapping
-  satellite sessions stays ducked until both finish (§6.5);
+  satellite sessions stays ducked until both finish (§6.4);
   `preDuckZoneVolumes` is what voice ducking restores to, captured at the
   moment each zone starts being ducked (§2, §12 — the accepted
   simplification if a user changes a zone's volume _during_ a duck).
@@ -355,7 +311,7 @@ copy.
   that's resolved, not as a solid MVP feature (§13).
 - **Zone list** — read from Snapserver's own control API (JSON-RPC), not
   configured by the user.
-- **Duck triggers** (§6.5) — `communication.vhf.busy` and
+- **Duck triggers** (§6.4) — `communication.vhf.busy` and
   `voice.satellites.<id>.state`, both published by other, optional
   plugins (the `htool` ICOM VHF plugins and signalk-wyoming
   respectively). Neither is a SignalK-spec-standard path; both are
@@ -381,7 +337,7 @@ signalk-container-helper conventions):
 | `POST /api/zones/:id/mute`                         | `{ muted: boolean }`                                                                                                                                                                                |
 | `GET /api/update/check` / `POST /api/update/apply` | Image update routes (`registerUpdateRoutes`, admin-only)                                                                                                                                            |
 | `GET /api/versions`                                | Image version list for the config panel dropdown, from GHCR's own tags/list API (`src/ghcr-versions.ts`) — not `registerUpdateRoutes`, which only covers the single latest-version check/apply flow |
-| `GET /api/satellites`                              | `{ ids: string[] }` — known `voice.satellites.<id>` ids (via `app.getSelfPath`), for the config panel's per-satellite duck-mapping dropdown (§6.5, §9)                                              |
+| `GET /api/satellites`                              | `{ ids: string[] }` — known `voice.satellites.<id>` ids (via `app.getSelfPath`), for the config panel's per-satellite duck-mapping dropdown (§6.4, §9)                                              |
 
 Actual playback control (play/pause/skip/queue/search) goes through the
 web client (§7) directly against Mopidy's own HTTP/JSON-RPC API — this
@@ -406,16 +362,15 @@ there to Mopidy/Snapserver) exactly like a REST call or a Fusion-Link
 command would; deltas are published on every canonical-state change
 regardless of which interface caused it:
 
-| Path                                             | Value                                   | Notes                                                                                                                                                                                    |
-| ------------------------------------------------ | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `entertainment.jukebox.playback.state`           | `'stopped'\|'playing'\|'paused'`        |                                                                                                                                                                                          |
-| `entertainment.jukebox.playback.track`           | `{ name, artist?, album? }`             | Present only while playing/paused                                                                                                                                                        |
-| `entertainment.jukebox.playback.volume`          | `number` (0-1 ratio), PUT-able          | Master volume (§4). SignalK's own convention for a level like this is a 0-1 ratio, not 0-100 — converted at this boundary only; internally (REST API, Mopidy's own API) it's still 0-100 |
-| `entertainment.jukebox.zones.<id>.connected`     | `boolean`                               |                                                                                                                                                                                          |
-| `entertainment.jukebox.zones.<id>.volume`        | `number` (0-1 ratio), PUT-able          | Same 0-1/0-100 conversion as `playback.volume` above                                                                                                                                     |
-| `entertainment.jukebox.zones.<id>.muted`         | `boolean`, PUT-able                     |                                                                                                                                                                                          |
-| `entertainment.jukebox.zones.<id>.n2kZone`       | `number` (0-3), read-only               | Present only if assigned (§2)                                                                                                                                                            |
-| `entertainment.jukebox.zones.<id>.airplay.track` | `{ title, artist?, album? }`, read-only | Present only while `activeSource` is `airplay` and metadata has arrived (§4, §6.4)                                                                                                       |
+| Path                                         | Value                            | Notes                                                                                                                                                                                    |
+| -------------------------------------------- | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `entertainment.jukebox.playback.state`       | `'stopped'\|'playing'\|'paused'` |                                                                                                                                                                                          |
+| `entertainment.jukebox.playback.track`       | `{ name, artist?, album? }`      | Present only while playing/paused                                                                                                                                                        |
+| `entertainment.jukebox.playback.volume`      | `number` (0-1 ratio), PUT-able   | Master volume (§4). SignalK's own convention for a level like this is a 0-1 ratio, not 0-100 — converted at this boundary only; internally (REST API, Mopidy's own API) it's still 0-100 |
+| `entertainment.jukebox.zones.<id>.connected` | `boolean`                        |                                                                                                                                                                                          |
+| `entertainment.jukebox.zones.<id>.volume`    | `number` (0-1 ratio), PUT-able   | Same 0-1/0-100 conversion as `playback.volume` above                                                                                                                                     |
+| `entertainment.jukebox.zones.<id>.muted`     | `boolean`, PUT-able              |                                                                                                                                                                                          |
+| `entertainment.jukebox.zones.<id>.n2kZone`   | `number` (0-3), read-only        | Present only if assigned (§2)                                                                                                                                                            |
 
 These exist so other plugins/instruments can show "now playing" or react
 to it; there is no other consumer identified yet (§13).
@@ -436,7 +391,7 @@ these paths are _consumed_, not published, by this plugin, via two
 independent mechanisms that both end up calling the same Mopidy action.
 (1) A plain delta subscription (`src/controls.ts`'s own
 `registerPlaybackControls`, `app.streambundle.getSelfStream`, the same
-mechanism §6.5's duck triggers use): any source that can publish a
+mechanism §6.4's duck triggers use): any source that can publish a
 SignalK delta on the path (an NMEA2000 momentary switch via another
 plugin, a webapp calling `app.handleMessage` directly) sends `1` on press
 and `0` on release; this plugin fires the matching action on every
@@ -450,8 +405,8 @@ paths' own meta at all (confirmed via signalk-server's own source: calling
 `registerPutHandler` publishes that meta automatically, as a side effect
 of registering — it isn't something this plugin has to publish itself):
 
-| Path                                               | Value                         |
-| -------------------------------------------------- | ------------------------------ |
+| Path                                               | Value                                   |
+| -------------------------------------------------- | --------------------------------------- |
 | `entertainment.jukebox.playback.controls.play`     | `0\|1`, momentary, press-edge, PUT-able |
 | `entertainment.jukebox.playback.controls.pause`    | `0\|1`, momentary, press-edge, PUT-able |
 | `entertainment.jukebox.playback.controls.next`     | `0\|1`, momentary, press-edge, PUT-able |
@@ -506,11 +461,9 @@ Both surfaces ride SignalK's already-configured N2K provider
 (`app.emit('nmea2000out', ...)` and the corresponding PGN-in hook) —
 the plugin does not open its own CAN connection (ARCHITECTURE.md §5).
 
-**Interaction with zone active source (§2, §6.4):** while a zone's
-`activeSource` is `airplay`, its broadcast volume/mute still reflects
-that zone's real Snapclient volume (the AirPlay session's audio is still
-routed through the same Snapclient, just from a different stream) — an
-MFD's per-zone volume control keeps working regardless of source, using
+**Per-zone volume, device-wide track (§2):** a zone's broadcast
+volume/mute reflects that zone's real Snapclient volume — an MFD's
+per-zone volume control keeps working regardless of source, using
 Fusion-Link's genuinely per-zone volume fields (`fusionSetZoneVolume` /
 `fusionVolumes`' `zone1`–`zone4`, confirmed via `@canboat/ts-pgns`, §13
 — this is also the protocol-level confirmation that Fusion-Link caps at
@@ -522,18 +475,8 @@ research, not assumed (§13): Fusion-Link's now-playing/source fields
 no `fusionSetZoneSource` or per-zone track message anywhere in the
 protocol, matching real Fusion hardware's own architecture (one source
 distributed to zones with independent volume/EQ, not independent
-per-zone source selection)** — so broadcasting Mopidy's track while a
-zone is actually playing someone's AirPlay session would show something
-flatly false. The fix: **if any N2K-zoned zone's `activeSource` is
-`airplay`, broadcast _that zone's_ real `airplay.track` (§4, §6.4) if
-metadata has arrived, falling back to a fixed placeholder ("AirPlay
-Active") only if it hasn't** — real data beats a fake string whenever
-it's available, which is the common case (most AirPlay sources push
-metadata within a second or two of starting). **Tie-break when more than
-one N2K-zoned zone is on AirPlay simultaneously** (device-wide field,
-one value only): the **lowest `n2kZone` number's** track wins (§12) —
-deterministic, and consistent with treating zone numbering as the stable
-identity it already is elsewhere in this doc.
+per-zone source selection)** — so this is always just Mopidy's own
+current track.
 
 **Bus-identity caveat (confirmed via research, §13):** the plugin
 broadcasts Fusion PGNs under the SignalK server's own already-claimed
@@ -544,62 +487,7 @@ and act on these broadcasts without the plugin passing an ISO Address
 Claim / Product Information challenge as its own device is **unverified
 and a real risk to the whole feature**, not a cosmetic gap — see §13.
 
-### 6.4 AirPlay Zone Receivers
-
-**True per-zone dynamic streams — confirmed viable via research (§13),
-after an earlier pre-provisioned-pool design was built around a
-restriction that turned out to be version-specific and no longer
-current.** Snapcast v0.33.0+ (PR #1444, "Sandbox") allows `Stream.
-AddStream`/`RemoveStream` to create and cleanly remove `process`-type
-streams (which `airplay` is, internally) via the control API, gated by a
-`stream.sandbox_dir` executable-path containment check rather than the
-earlier v0.31.0–v0.32.x type whitelist. `RemoveStream` was independently
-confirmed to SIGINT the whole process group (killing `shairport-sync`
-and its children, not orphaning them) and cleanly unassign — not
-error — any client left on the removed stream. Since this plugin builds
-and pins its own Snapserver version (ARCHITECTURE.md §2.4), there is no
-compatibility burden in requiring ≥ 0.33.0. Managed entirely by the
-Mopidy/Snapserver adapter (ARCHITECTURE.md §2.2) — no separate REST
-surface; this is infrastructure, not something a user configures
-per-zone beyond the boat-wide toggle in §9.
-
-- **Create on zone connect:** the plugin calls `Stream.AddStream` with an
-  `airplay://` URI pointing at `shairport-sync` (installed inside the
-  configured `sandbox_dir`, ARCHITECTURE.md §2.4) and a `name` derived
-  from `airplay.namePattern` (§9) using the zone's real name — correct
-  from the start, no placeholder-then-rename step needed. The resulting
-  stream's implicit group (§13) is then bound to that zone's Snapclient
-  via `Group.SetClients`.
-- **Remove on zone disconnect:** `Stream.RemoveStream` on that zone's
-  stream id — cleanly kills `shairport-sync` and drops the mDNS
-  advertisement (confirmed, above). No phantom idle receivers for
-  offline zones, unlike the earlier pool design.
-- **No pool, no cap, no slot numbering:** each zone gets its own stream
-  created/removed on demand — there is nothing to run out of, so
-  `airplay.maxZones` and `ZoneAssignment.airplaySlot` (both artifacts of
-  the pool design) are removed (§4, §9, §12). `n2kZone` is unaffected —
-  its 4-zone cap comes from the Fusion-Link protocol itself (confirmed,
-  §13), not from anything Snapcast-related.
-- **`controlscript=` deliberately not used** in the stream URI — a known,
-  currently-open Snapcast bug (#1455) leaks that auxiliary process on
-  removal. Not needed anyway: `shairport-sync`'s metadata pipe
-  (`--metadata-pipename`, below) is independent of the stream URI's
-  `controlscript` parameter.
-- **Naming collisions:** if two zones would produce the same advertised
-  name (e.g. duplicate zone names), the plugin must disambiguate (e.g.
-  append the Snapclient id) rather than silently advertise two identical
-  AirPlay targets — exact scheme TBD at implementation time.
-- **Metadata pipe:** each zone's `shairport-sync` is launched with
-  `--metadata-enable` pointed at a per-zone named pipe. The plugin tails
-  that pipe, parses `shairport-sync`'s documented DAAP-tagged metadata
-  format, and writes `title`/`artist`/`album` into that zone's
-  `Zone.airplay.track` (§4) as they arrive — feeding both the zone-level
-  SK path (§6.2) and, for N2K-zoned zones, the Fusion-Link broadcast
-  (§6.3). Not every AirPlay source sends metadata, and it can lag session
-  start by a second or two; both cases just mean `track` stays absent
-  until (or unless) something arrives, not an error.
-
-### 6.5 Duck Triggers
+### 6.4 Duck Triggers
 
 Two independent, optional subscriptions to external SignalK deltas —
 neither requires the other plugin to exist; a missing path just means
@@ -721,15 +609,12 @@ all-zone fallback, volume duck, §2):**
 | `n2k.enabled`                                 | `false`                         | Master toggle for the N2K/Fusion-Link interface                                                                                                                                                                                                                                                                                             |
 | `n2k.deviceName`                              | `"Jukebox"`                     | Presented as the Fusion device's name on the bus                                                                                                                                                                                                                                                                                            |
 | `n2k.deviceInstance`                          | `0`                             | NMEA2000 device instance, in case a boat somehow runs two jukebox-like devices                                                                                                                                                                                                                                                              |
-| `airplay.enabled`                             | `true`                          | Master toggle for per-zone AirPlay receivers (§6.4)                                                                                                                                                                                                                                                                                         |
-| `airplay.namePattern`                         | `"{boatName} - {zoneName}"`     | mDNS name template a zone's receiver is created with; `{boatName}` sourced from SignalK's own vessel name where available                                                                                                                                                                                                                   |
-| `airplay.hostNetworking`                      | `false`                         | Required for AirPlay to actually be discoverable/reachable from real devices (§6.4, §12) — switches the container to `networkMode: host`. Off by default; the operator explicitly opts in                                                                                                                                                   |
-| `vhf.enabled`                                 | `true`                          | Master toggle for the VHF pause trigger (§6.5); harmless if no VHF plugin is installed — the path just never fires                                                                                                                                                                                                                          |
+| `vhf.enabled`                                 | `true`                          | Master toggle for the VHF pause trigger (§6.4); harmless if no VHF plugin is installed — the path just never fires                                                                                                                                                                                                                          |
 | `vhf.resumeDelaySeconds`                      | `5`                             | Delay after `communication.vhf.busy` clears before auto-resuming                                                                                                                                                                                                                                                                            |
-| `voiceDucking.enabled`                        | `true`                          | Master toggle for the voice-activity duck trigger (§6.5)                                                                                                                                                                                                                                                                                    |
+| `voiceDucking.enabled`                        | `true`                          | Master toggle for the voice-activity duck trigger (§6.4)                                                                                                                                                                                                                                                                                    |
 | `voiceDucking.duckVolumePercent`              | `20`                            | Zone volume (0-100) while any voice satellite is active                                                                                                                                                                                                                                                                                     |
 | `voiceDucking.resumeDelaySeconds`             | `1`                             | Delay after a satellite returns to `idle` before restoring its target zones' volume                                                                                                                                                                                                                                                         |
-| `voiceDucking.satelliteZoneMap`               | `[]`                            | Optional array of `{ satelliteId, zoneId }` pairs (§2, §6.5) -- an array of pairs, not a keyed map, confirmed by build-testing: the Admin UI's schema-form library doesn't render a free-form `additionalProperties` map at all, but does render an editable array-of-objects list. Satellites with no entry duck all zones (safe fallback) |
+| `voiceDucking.satelliteZoneMap`               | `[]`                            | Optional array of `{ satelliteId, zoneId }` pairs (§2, §6.4) -- an array of pairs, not a keyed map, confirmed by build-testing: the Admin UI's schema-form library doesn't render a free-form `additionalProperties` map at all, but does render an editable array-of-objects list. Satellites with no entry duck all zones (safe fallback) |
 | `localSnapclient.enabled`                     | `false`                         | Runs a second, optional managed container (`local-snapclient.ts`, §12) -- a Snapclient zone on this SignalK server's own sound card, for speakers wired directly to that machine rather than a separate physical device                                                                                                                     |
 | `localSnapclient.soundCard`                   | `""`                            | ALSA device string (e.g. `plughw:CARD=wm8960soundcard,DEV=0`); required when enabled, no "auto" fallback -- a bare "default" device is ambiguous on a host with more than one sound card and fails outright (confirmed by build-testing)                                                                                                    |
 | `localSnapclient.tag`                         | `"auto"`                        | Image tag for `ghcr.io/boathacks/signalk-jukebox-snapclient`, this project's own minimal Snapclient-only image                                                                                                                                                                                                                              |
@@ -756,10 +641,7 @@ all-zone fallback, volume duck, §2):**
 - NMEA2000/Fusion-Link interface (§6.3): Fusion stereo emulation
   (broadcast + accept commands), stable zone-to-N2K-zone mapping, plus
   the standard NMEA2000 Entertainment PGN set on a best-effort basis.
-- Per-zone AirPlay receivers (§6.4): dynamically provisioned/torn down
-  with each zone, replacing that zone's audio while a session is active,
-  reverting to the Jukebox source when it ends.
-- Duck triggers (§6.5): boat-wide pause on `communication.vhf.busy`,
+- Duck triggers (§6.4): boat-wide pause on `communication.vhf.busy`,
   all-zone volume duck on `voice.satellites.*.state`, both optional and
   degrading silently when their source path never appears.
 - Standard container-helper update flow (version dropdown, check/apply).
@@ -778,17 +660,12 @@ all-zone fallback, volume duck, §2):**
   insufficient in practice.
 - **Producing or routing announcement audio itself** — synthesizing and
   playing TTS audio into zones remains signalk-wyoming's domain entirely.
-  What _is_ in scope (§2, §6.5): signalk-jukebox reacting — ducking or
+  What _is_ in scope (§2, §6.4): signalk-jukebox reacting — ducking or
   pausing its own playback — to signalk-wyoming's and other plugins'
   already-published SignalK state, without ever handling their audio.
-- **Android-equivalent casting** (Chromecast/Bluetooth/DLNA, §1.4) —
-  deferred until the per-zone AirPlay model above is built and proven;
-  which specific target to build depends partly on how AirPlay's
-  per-zone dynamic provisioning holds up in practice.
-- **AirPlay now-playing metadata surfaced to N2K/Fusion or SK paths** —
-  MVP only handles audio routing for AirPlay sessions, not showing
-  track/artist from someone's phone on the MFD or in Iris (§6.3's noted
-  gap).
+- **Casting from a phone** (AirPlay, Chromecast/Bluetooth/DLNA, §1.4) —
+  deferred; AirPlay was implemented and later removed (§12) after an
+  unresolved live-network/timing issue made it unreliable.
 
 ## 11. References
 
@@ -803,7 +680,7 @@ all-zone fallback, volume duck, §2):**
   (`fusionSetSource`, `fusionTrackName`/`fusionArtistName`/
   `fusionAlbumName`, all keyed by `sourceId` not zone).
 - [FutureProofHomes/wyoming-enhancements](https://github.com/FutureProofHomes/wyoming-enhancements) —
-  the researched precedent for voice-activity ducking (§6.5, §12): a
+  the researched precedent for voice-activity ducking (§6.4, §12): a
   wake-word `--detection-command`/`--tts-stop-command` pair that dips and
   restores a PulseAudio sink's volume around a voice interaction. The
   mechanism this project adapts is "duck via volume, not stream-swap";
@@ -812,7 +689,7 @@ all-zone fallback, volume duck, §2):**
   assume (§13).
 - [htool/signalk-icom-m510e-plugin](https://github.com/htool/signalk-icom-m510e-plugin) and
   [htool/signalk-icom-ct-m500-plugin](https://github.com/htool/signalk-icom-ct-m500-plugin) —
-  source of the confirmed `communication.vhf.busy` path (§6.5, §13).
+  source of the confirmed `communication.vhf.busy` path (§6.4, §13).
 - [Canboat](https://github.com/canboat/canboat) — the community-maintained
   NMEA2000 PGN definition database; source for the standard Entertainment
   PGN definitions (§6.3) and a common reference point for reverse-engineered
@@ -953,7 +830,7 @@ all-zone fallback, volume duck, §2):**
   unmounted and equally ephemeral before this. Resolved the same way
   `libraryMount` already was: `resolveMount()` against this plugin's own
   `app.getDataDirPath()` (not `ContainerConfig.signalkDataMount`, which
-  resolves to *signalk-container's* own data dir, not this plugin's —
+  resolves to _signalk-container's_ own data dir, not this plugin's —
   `resolveMount`'s own doc comment on this), unconditionally rather than
   gated on the local-library backend being enabled, since Snapcast's own
   state has nothing to do with that setting.
@@ -1056,11 +933,12 @@ all-zone fallback, volume duck, §2):**
   Mapping backends to Fusion sources would need per-backend Fusion source
   metadata with no clean protocol fit, for a distinction MFD users likely
   don't think in anyway ("play my music," not "switch to the Local
-  input"). AirPlay's per-zone source switch (§6.4) doesn't reopen this —
-  it's a genuinely distinct input the same way Aux is, but it's scoped to
-  one zone at a time rather than the boat-wide "current source" concept
-  Fusion's own source model assumes, so it doesn't map onto Fusion's
-  source-select cleanly either. **Confirmed via research, not just
+  input"). AirPlay's per-zone source switch (while it existed — since
+  removed, §13) didn't reopen this either — it was a genuinely distinct
+  input the same way Aux is, but scoped to one zone at a time rather
+  than the boat-wide "current source" concept Fusion's own source model
+  assumes, so it didn't map onto Fusion's source-select cleanly either.
+  **Confirmed via research, not just
   inferred (§13):** Fusion-Link's protocol has no per-zone source concept
   at all — `fusionSetSource`/`fusionTrackName`/etc. are keyed by
   `sourceId` device-wide, never by zone, matching how real Fusion
@@ -1244,6 +1122,23 @@ all-zone fallback, volume duck, §2):**
   separately calls Snapcast's own `Client.SetName` RPC on it with the
   configured `zoneName` — the same mechanism a Snapweb UI uses to rename
   any zone, which persists server-side across reconnects.
+- **AirPlay support removed entirely, after being fully designed, built,
+  and live-tested (all decisions above from "Snapcast's native `airplay`
+  stream type..." onward document that work).** Live testing on a real
+  boat reproduced intermittent static/clipping during real AirPlay
+  playback (e.g. from Spotify). Extensive isolation testing — injecting
+  known-amplitude sine tones, white noise, and real music directly at
+  full digital scale into every stage of the pipeline (the panel's own
+  audio hardware, the wyoming-bridge's resample/downmix, and Snapcast's
+  own AirPlay-specific 44100→48000 resampler) — came back clean every
+  time, pointing at a live network/timing issue (WiFi jitter, host CPU
+  contention) rather than a fixed, reproducible bug in this plugin's own
+  code. Rather than ship a feature that intermittently degrades audio
+  quality with no confirmed fix, the whole feature (per-zone/per-input
+  AirPlay receivers, the `airplay.*` config schema, the shairport-sync/
+  nqptp build in the container image, and the `zone.airplay` state) was
+  removed. The design history above is kept for context if AirPlay is
+  ever revisited, not because any of it is still built.
 
 ## 13. Open Questions
 
@@ -1350,13 +1245,6 @@ Audio`) service is advertised. `port=` is also confirmed real (pins
     decision, though it doesn't change that decision (mDNS itself still
     needs a real LAN-facing network regardless of how bounded the ports
     are).
-- **shairport-sync metadata pipe: exact parsing approach not chosen.**
-  The pipe emits DAAP-tagged binary chunks (a documented but not
-  trivially-JSON format — `shairport-sync`'s own docs and reference
-  scripts like `shairport-sync-metadata-reader` describe the tag
-  structure); whether to hand-roll a small parser or find/adapt an
-  existing Node one is an implementation detail to settle when §6.4 is
-  built, not a design question. Doesn't block the design in §4/§6.3/§6.4.
 - **wyoming-satellite as a zone type.** Satellites are ALSA
   speaker/mic devices already deployed on some boats for voice, not
   Snapclients. A future zone backend could target a satellite's control
@@ -1384,7 +1272,7 @@ Audio`) service is advertised. `port=` is also confirmed real (pins
   fixable from this side. Documented as a real, permanent limitation of
   this integration, not a TODO.
 - **Auto-detecting the satellite↔zone correlation, rather than requiring
-  manual config.** §6.5/§9's `satelliteZoneMap` is user-configured by
+  manual config.** §6.4/§9's `satelliteZoneMap` is user-configured by
   design (§12) — there's no reliable way to infer it (a satellite id
   like `"cockpit"` doesn't mechanically imply a same-named Snapclient is
   the right one, or exists at all). An auto-detection heuristic would
@@ -1392,7 +1280,7 @@ Audio`) service is advertised. `port=` is also confirmed real (pins
   unilaterally here; not attempted for MVP.
 - **Restoring a zone's volume after a voice duck when the user changed
   it mid-duck.** Current design overwrites whatever the user set during
-  the duck with the pre-duck value (§6.5, §12) — an accepted
+  the duck with the pre-duck value (§6.4, §12) — an accepted
   simplification, not solved. Worth watching for real complaints before
   adding the complexity of tracking "did the user touch this since
   ducking started."

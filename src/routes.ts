@@ -45,7 +45,6 @@ export interface RegisterRoutesArgs {
 const JUKEBOX_STREAM_ID = "MusicAndAlerts";
 const ALERTS_STREAM_ID = "Alerts";
 const SILENCE_STREAM_ID = "Silence";
-const AIRPLAY_STREAM_ID = "AirPlay";
 
 export function registerRoutes({
   router,
@@ -127,19 +126,13 @@ export function registerRoutes({
   });
 
   // Which source plays in this zone (the web UI's zone/source picker).
-  // "jukebox", "alerts", "silence", and "airplay" are all settable here.
-  // "alerts" (container.ts's ALERTS_STREAM_ID, a standing announcement-
-  // intake stream, SPEC.md §6, §12) is how a zone can be taken off the
-  // jukebox stream without muting the Snapclient outright, so it still
-  // hears announcements; "silence" (SILENCE_STREAM_ID) is for a zone that
+  // "jukebox", "alerts", and "silence" are all settable here. "alerts"
+  // (container.ts's ALERTS_STREAM_ID, a standing announcement-intake
+  // stream, SPEC.md §6, §12) is how a zone can be taken off the jukebox
+  // stream without muting the Snapclient outright, so it still hears
+  // announcements; "silence" (SILENCE_STREAM_ID) is for a zone that
   // shouldn't hear anything at all, not even announcements, e.g. a
-  // sleeping cabin. "airplay" (AIRPLAY_STREAM_ID) points the zone directly
-  // at the single, statically-declared AirPlay input (container.ts's
-  // JUKEBOX_AIRPLAY_ENABLED/JUKEBOX_AIRPLAY_DEVICENAME,
-  // snapserver.conf.template) -- manually assigned, same as alerts/
-  // silence, not auto-switched on connect (SPEC.md §6.4, revised: a
-  // single shared input any zone can be pointed at, not a receiver
-  // per zone).
+  // sleeping cabin.
   router.post("/api/zones/:id/source", (rawReq, res) => {
     const req = rawReq as ExpressLikeRequest;
     const zone = store.getZone(req.params.id);
@@ -152,14 +145,9 @@ export function registerRoutes({
       return;
     }
     const source = req.body?.source;
-    if (
-      source !== "jukebox" &&
-      source !== "alerts" &&
-      source !== "silence" &&
-      source !== "airplay"
-    ) {
+    if (source !== "jukebox" && source !== "alerts" && source !== "silence") {
       res.status(400).json({
-        error: 'source must be "jukebox", "alerts", "silence", or "airplay"',
+        error: 'source must be "jukebox", "alerts", or "silence"',
       });
       return;
     }
@@ -168,9 +156,7 @@ export function registerRoutes({
         ? JUKEBOX_STREAM_ID
         : source === "alerts"
           ? ALERTS_STREAM_ID
-          : source === "silence"
-            ? SILENCE_STREAM_ID
-            : AIRPLAY_STREAM_ID;
+          : SILENCE_STREAM_ID;
     snapserver.client
       .setGroupStream(zone.groupId, streamId)
       .then(() => {

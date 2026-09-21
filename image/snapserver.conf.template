@@ -1,13 +1,5 @@
 # snapserver.conf template (ARCHITECTURE.md §2.4, §7). Rendered by
 # entrypoint.sh via envsubst. Build-tested against Snapserver 0.35.0.
-#
-# The AirPlay input (a single, statically-declared `airplay://` source,
-# not per-zone -- SPEC.md §6.4, revised) is NOT declared here: it's
-# conditional on JUKEBOX_AIRPLAY_ENABLED, and this file has no way to
-# express that itself (envsubst only substitutes variables, it can't omit
-# a whole line). entrypoint.sh appends it, and rewrites the
-# `MusicAndAlerts` meta source below to include it, after rendering this
-# template -- see that file's own comment on this.
 
 [server]
 # Where server.json lives (client/group registration, volume, mute, and
@@ -64,10 +56,6 @@ source = pipe:///tmp/silencefifo?name=Silence&sampleformat=48000:16:2
 # inputs) because each is still directly connectable in its own right (a
 # zone manually switched to "Alerts" via the webapp targets the raw
 # stream, not this one).
-#
-# Alerts/MopidyOnly only here -- entrypoint.sh rewrites this line to
-# Alerts/AirPlay/MopidyOnly when JUKEBOX_AIRPLAY_ENABLED is true (this
-# file has no conditional-line mechanism of its own).
 source = meta:///Alerts/MopidyOnly?name=MusicAndAlerts
 
 # New (never-before-seen) Snapclients default here, not the raw MopidyOnly
@@ -75,13 +63,6 @@ source = meta:///Alerts/MopidyOnly?name=MusicAndAlerts
 # connection -- otherwise defaults to the first non-meta source
 # (MopidyOnly).
 default_source = MusicAndAlerts
-
-# Runtime-created airplay streams (Stream.AddStream) must reference an
-# executable inside this directory -- confirmed via research (SPEC.md
-# §13) this is Snapserver >= 0.33.0's replacement for the earlier
-# process-stream RPC restriction. entrypoint.sh places a shairport-sync
-# wrapper here before starting Snapserver.
-sandbox_dir = /app/sandbox
 
 [http]
 # Snapweb (image/Dockerfile) lives here: this is Snapcast's genuinely

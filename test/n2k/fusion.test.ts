@@ -49,13 +49,21 @@ function pgnsOfType<T extends EmittedPgn>(
 /** The first emitted PGN whose `fields` object has the given key set --
  * throws (failing the test with a clear message) rather than returning
  * undefined, so every caller gets a real, non-optional EmittedPgn back. */
-function firstWithField(emit: ReturnType<typeof vi.fn>, field: string): EmittedPgn {
-  const found = emittedPgns(emit).find((pgn) => pgn.fields[field] !== undefined);
+function firstWithField(
+  emit: ReturnType<typeof vi.fn>,
+  field: string,
+): EmittedPgn {
+  const found = emittedPgns(emit).find(
+    (pgn) => pgn.fields[field] !== undefined,
+  );
   if (!found) throw new Error(`no emitted PGN had a "${field}" field`);
   return found;
 }
 
-function allWithField(emit: ReturnType<typeof vi.fn>, field: string): EmittedPgn[] {
+function allWithField(
+  emit: ReturnType<typeof vi.fn>,
+  field: string,
+): EmittedPgn[] {
   return emittedPgns(emit).filter((pgn) => pgn.fields[field] !== undefined);
 }
 
@@ -63,7 +71,12 @@ const basePlayback: PlaybackState = {
   state: "playing",
   volume: 50,
   muted: false,
-  track: { uri: "local:track:1", name: "Groove Salad", artist: "SomaFM", album: "Ambient" },
+  track: {
+    uri: "local:track:1",
+    name: "Groove Salad",
+    artist: "SomaFM",
+    album: "Ambient",
+  },
 };
 
 function makeZone(overrides: Partial<Zone> = {}): Zone {
@@ -80,7 +93,7 @@ function makeZone(overrides: Partial<Zone> = {}): Zone {
 }
 
 describe("FusionAdapter.broadcastState", () => {
-  it("always broadcasts source and Mopidy's own track when no zone is on AirPlay", () => {
+  it("always broadcasts source and Mopidy's own track", () => {
     const { app, emit } = fakeApp();
     const adapter = new FusionAdapter({ deviceName: "Jukebox", app });
 
@@ -94,66 +107,15 @@ describe("FusionAdapter.broadcastState", () => {
     expect(firstWithField(emit, "artist").fields.artist).toBe("SomaFM");
   });
 
-  it("broadcasts the lowest-n2kZone AirPlay zone's real track instead of Mopidy's, when one zone is on AirPlay", () => {
-    const { app, emit } = fakeApp();
-    const adapter = new FusionAdapter({ deviceName: "Jukebox", app });
-
-    const zones = [
-      makeZone({
-        id: "zone-a",
-        n2kZone: 1,
-        activeSource: "airplay",
-        airplay: { streamName: "s", connected: true, track: { title: "AirPlay Song", artist: "Some Artist" } },
-      }),
-    ];
-
-    adapter.broadcastState(basePlayback, zones);
-
-    expect(firstWithField(emit, "track").fields.track).toBe("AirPlay Song");
-  });
-
-  it("falls back to the AirPlay placeholder when the AirPlay zone has no metadata yet", () => {
-    const { app, emit } = fakeApp();
-    const adapter = new FusionAdapter({ deviceName: "Jukebox", app });
-
-    const zones = [makeZone({ n2kZone: 0, activeSource: "airplay", airplay: { streamName: "s", connected: true } })];
-
-    adapter.broadcastState(basePlayback, zones);
-
-    expect(firstWithField(emit, "track").fields.track).toBe("AirPlay Active");
-  });
-
-  it("tie-breaks two simultaneous AirPlay zones by the lowest n2kZone", () => {
-    const { app, emit } = fakeApp();
-    const adapter = new FusionAdapter({ deviceName: "Jukebox", app });
-
-    const zones = [
-      makeZone({
-        id: "zone-high",
-        n2kZone: 3,
-        activeSource: "airplay",
-        airplay: { streamName: "s", connected: true, track: { title: "Should Lose" } },
-      }),
-      makeZone({
-        id: "zone-low",
-        n2kZone: 0,
-        activeSource: "airplay",
-        airplay: { streamName: "s", connected: true, track: { title: "Should Win" } },
-      }),
-    ];
-
-    adapter.broadcastState(basePlayback, zones);
-
-    expect(firstWithField(emit, "track").fields.track).toBe("Should Win");
-  });
-
   it("reflects master mute state", () => {
     const { app, emit } = fakeApp();
     const adapter = new FusionAdapter({ deviceName: "Jukebox", app });
 
     adapter.broadcastState({ ...basePlayback, muted: true }, []);
 
-    expect(firstWithField(emit, "mute").fields.mute).toBe(FusionMuteCommand.MuteOn);
+    expect(firstWithField(emit, "mute").fields.mute).toBe(
+      FusionMuteCommand.MuteOn,
+    );
   });
 
   it("broadcasts per-zone volumes/names only for zones with an n2kZone, mapped by slot", () => {
@@ -169,7 +131,10 @@ describe("FusionAdapter.broadcastState", () => {
     adapter.broadcastState(basePlayback, zones);
 
     const volumeCalls = emittedPgns(emit).filter(
-      (pgn) => pgn.fields.zone1 !== undefined || pgn.fields.zone2 !== undefined || pgn.fields.zone3 !== undefined,
+      (pgn) =>
+        pgn.fields.zone1 !== undefined ||
+        pgn.fields.zone2 !== undefined ||
+        pgn.fields.zone3 !== undefined,
     );
     expect(volumeCalls).toHaveLength(1);
     const volumes = volumeCalls[0];
@@ -180,7 +145,10 @@ describe("FusionAdapter.broadcastState", () => {
     expect(volumes.fields.zone4).toBeUndefined();
 
     const zoneNameCalls = allWithField(emit, "number");
-    const names = zoneNameCalls.map((pgn) => [pgn.fields.number, pgn.fields.name]);
+    const names = zoneNameCalls.map((pgn) => [
+      pgn.fields.number,
+      pgn.fields.name,
+    ]);
     expect(names).toContainEqual([0, "Salon"]);
     expect(names).toContainEqual([2, "Cockpit"]);
     expect(names).not.toContainEqual([undefined, "Unassigned"]);
@@ -206,18 +174,27 @@ describe("FusionAdapter.decodeIncoming", () => {
     [FusionCommand.Next, "next"],
     [FusionCommand.Prev, "previous"],
   ] as const)("decodes MediaControl(%s) to %s", (command, expected) => {
-    const pgn = new PGN_126720_FusionMediaControl({ command, sourceId: 0 }, 255);
+    const pgn = new PGN_126720_FusionMediaControl(
+      { command, sourceId: 0 },
+      255,
+    );
     expect(adapter.decodeIncoming(pgn)).toEqual([{ type: expected }]);
   });
 
   it("decodes SetZoneVolume into a single zoneVolume command", () => {
-    const pgn = new PGN_126720_FusionSetZoneVolume({ zone: 2, volume: 65 }, 255);
+    const pgn = new PGN_126720_FusionSetZoneVolume(
+      { zone: 2, volume: 65 },
+      255,
+    );
     const result: FusionIncomingCommand[] = adapter.decodeIncoming(pgn);
     expect(result).toEqual([{ type: "zoneVolume", n2kZone: 2, volume: 65 }]);
   });
 
   it("decodes SetAllVolumes into one zoneVolume command per defined zone, skipping undefined ones", () => {
-    const pgn = new PGN_126720_FusionSetAllVolumes({ zone1: 10, zone3: 30 }, 255);
+    const pgn = new PGN_126720_FusionSetAllVolumes(
+      { zone1: 10, zone3: 30 },
+      255,
+    );
     const result = adapter.decodeIncoming(pgn);
     expect(result).toEqual([
       { type: "zoneVolume", n2kZone: 0, volume: 10 },
@@ -226,10 +203,20 @@ describe("FusionAdapter.decodeIncoming", () => {
   });
 
   it("decodes SetMute on/off into masterMute", () => {
-    const on = new PGN_126720_FusionSetMute({ command: FusionMuteCommand.MuteOn }, 255);
-    const off = new PGN_126720_FusionSetMute({ command: FusionMuteCommand.MuteOff }, 255);
-    expect(adapter.decodeIncoming(on)).toEqual([{ type: "masterMute", muted: true }]);
-    expect(adapter.decodeIncoming(off)).toEqual([{ type: "masterMute", muted: false }]);
+    const on = new PGN_126720_FusionSetMute(
+      { command: FusionMuteCommand.MuteOn },
+      255,
+    );
+    const off = new PGN_126720_FusionSetMute(
+      { command: FusionMuteCommand.MuteOff },
+      255,
+    );
+    expect(adapter.decodeIncoming(on)).toEqual([
+      { type: "masterMute", muted: true },
+    ]);
+    expect(adapter.decodeIncoming(off)).toEqual([
+      { type: "masterMute", muted: false },
+    ]);
   });
 
   it("decodes RequestStatus into requestStatus", () => {

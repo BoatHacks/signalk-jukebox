@@ -85,7 +85,8 @@ export default function PluginConfigurationPanel({
   // backends.spotify.enabled when backends existed but backends.spotify
   // didn't.
   const merged = mergeSettings(cfg);
-  const { backends, n2k, airplay, vhf, voiceDucking, localSnapclient, wyomingBridges } = merged;
+  const { backends, n2k, vhf, voiceDucking, localSnapclient, wyomingBridges } =
+    merged;
 
   const patch = (next: Partial<PluginSettings>) =>
     setCfg((prev) => ({ ...prev, ...next }));
@@ -237,63 +238,6 @@ export default function PluginConfigurationPanel({
               }
             />
           </FieldRow>
-        </>
-      )}
-
-      <FieldRow label="AirPlay input">
-        <input
-          type="checkbox"
-          style={S.checkbox}
-          checked={airplay.enabled}
-          onChange={(e) =>
-            patch({ airplay: { ...airplay, enabled: e.target.checked } })
-          }
-        />
-      </FieldRow>
-      {airplay.enabled && (
-        <>
-          <FieldRow label="AirPlay name pattern">
-            <input
-              style={S.input}
-              value={airplay.namePattern}
-              onChange={(e) =>
-                patch({ airplay: { ...airplay, namePattern: e.target.value } })
-              }
-            />
-          </FieldRow>
-          <FieldRow
-            label="Host networking"
-            hint="required for AirPlay discovery -- see warning below"
-          >
-            <input
-              type="checkbox"
-              style={S.checkbox}
-              checked={airplay.hostNetworking}
-              onChange={(e) =>
-                patch({
-                  airplay: { ...airplay, hostNetworking: e.target.checked },
-                })
-              }
-            />
-          </FieldRow>
-          {!airplay.hostNetworking && (
-            <div style={S.infoBanner}>
-              The AirPlay receiver won&apos;t be discoverable by iPhones/iPads
-              on the boat WiFi with this off. mDNS advertisement and the
-              receiver&apos;s RTSP/RTP ports don&apos;t reach the LAN through
-              this container&apos;s default networking at all.
-            </div>
-          )}
-          {airplay.hostNetworking && (
-            <div style={S.warnBanner}>
-              <div style={S.warnBannerTitle}>Host networking is on</div>
-              This container shares the host&apos;s network namespace and full
-              port space with every other process on this machine, instead of
-              being isolated on its own bridged network. Required for AirPlay
-              discovery to work at all; only disable if you don&apos;t need
-              AirPlay.
-            </div>
-          )}
         </>
       )}
 

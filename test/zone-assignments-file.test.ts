@@ -11,7 +11,9 @@ describe("zone-assignments-file", () => {
   let dir: string;
 
   beforeEach(async () => {
-    dir = await mkdtemp(path.join(tmpdir(), "signalk-jukebox-zone-assignments-"));
+    dir = await mkdtemp(
+      path.join(tmpdir(), "signalk-jukebox-zone-assignments-"),
+    );
   });
 
   afterEach(async () => {
@@ -52,7 +54,11 @@ describe("zone-assignments-file", () => {
   });
 
   it("falls back to an empty object for corrupt JSON, rather than throwing", async () => {
-    await writeFile(path.join(dir, "zone-assignments.json"), "{not valid json", "utf8");
+    await writeFile(
+      path.join(dir, "zone-assignments.json"),
+      "{not valid json",
+      "utf8",
+    );
     const assignments = await loadZoneAssignments(dir);
     expect(assignments).toEqual({});
   });

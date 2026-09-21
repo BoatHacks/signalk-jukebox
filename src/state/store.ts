@@ -81,7 +81,7 @@ export class StateStore {
   }
 
   /**
-   * Assign a zone's n2kZone/airplaySlot once. Never overwrites an existing
+   * Assign a zone's n2kZone once. Never overwrites an existing
    * assignment for a given key (SPEC.md §2, §12) -- callers claiming a slot
    * must check getZoneAssignment() first and only call this for a value
    * that isn't set yet.

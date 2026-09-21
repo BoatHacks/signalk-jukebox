@@ -24,26 +24,7 @@ export interface PlaybackState {
   muted: boolean;
 }
 
-export type ZoneActiveSource = "jukebox" | "alerts" | "silence" | "airplay";
-
-export interface AirPlayTrack {
-  title: string;
-  artist?: string;
-  album?: string;
-}
-
-export interface ZoneAirPlayInfo {
-  /** The mDNS name this zone's receiver was created with (SPEC.md §6.4). */
-  streamName: string;
-  /** Whether a device currently has an active AirPlay session to it. */
-  connected: boolean;
-  /** From shairport-sync's metadata pipe (SPEC.md §6.3, §6.4). Absent
-   * until the sending device/app pushes metadata -- not every AirPlay
-   * source does, and it can lag session start -- so absence means
-   * "nothing received yet," not "definitely nothing," and callers fall
-   * back to a placeholder rather than treating it as an error. */
-  track?: AirPlayTrack;
-}
+export type ZoneActiveSource = "jukebox" | "alerts" | "silence";
 
 export interface Zone {
   /** Snapclient id, as assigned by Snapserver. */
@@ -59,16 +40,13 @@ export interface Zone {
   /** 0-3, present only if this zone was assigned an N2K/Fusion slot. */
   n2kZone?: number;
   activeSource: ZoneActiveSource;
-  airplay?: ZoneAirPlayInfo;
 }
 
 /**
  * Persisted Snapclient id -> N2K zone number. Assigned once, the first
  * time a zone is ever seen, and never reassigned automatically thereafter
  * (SPEC.md §2, §4, §12 — this is what makes "Zone 1" on an MFD mean the
- * same physical speaker across restarts and reconnects). AirPlay has no
- * equivalent here (SPEC.md §6.4, §12) -- a zone's AirPlay receiver is
- * created/removed on demand, not claimed from a persisted slot.
+ * same physical speaker across restarts and reconnects).
  */
 export interface ZoneAssignment {
   n2kZone?: number;
@@ -106,22 +84,6 @@ export interface PluginSettings {
     enabled: boolean;
     deviceName: string;
     deviceInstance: number;
-  };
-  airplay: {
-    enabled: boolean;
-    namePattern: string;
-    /** Run the container with host networking instead of a bridged/NAT
-     * network (ARCHITECTURE.md §5, §6, confirmed by build-testing).
-     * AirPlay discovery (mDNS) and each per-zone receiver's own
-     * dynamically-chosen RTSP/RTP ports don't traverse a bridge/NAT
-     * boundary to the LAN at all -- there is no fixed port list to
-     * publish individually the way Snapcast's stream port can be, since
-     * each zone's shairport-sync instance is created on demand (§6.4).
-     * Host networking removes that boundary entirely, at the cost of
-     * this container sharing the host's network namespace and port space
-     * with every other process on it -- default off; AirPlay zones won't
-     * be discoverable by real devices until this is enabled. */
-    hostNetworking: boolean;
   };
   vhf: {
     enabled: boolean;
@@ -208,7 +170,6 @@ export function mergeSettings(
       },
     },
     n2k: { ...SCHEMA_DEFAULTS.n2k, ...rawConfig.n2k },
-    airplay: { ...SCHEMA_DEFAULTS.airplay, ...rawConfig.airplay },
     vhf: { ...SCHEMA_DEFAULTS.vhf, ...rawConfig.vhf },
     voiceDucking: {
       ...SCHEMA_DEFAULTS.voiceDucking,
@@ -241,11 +202,6 @@ export const SCHEMA_DEFAULTS: PluginSettings = {
     enabled: false,
     deviceName: "Jukebox",
     deviceInstance: 0,
-  },
-  airplay: {
-    enabled: true,
-    namePattern: "{boatName} - {zoneName}",
-    hostNetworking: false,
   },
   vhf: {
     enabled: true,

@@ -23,17 +23,23 @@ describe("migrateZonesToCurrentJukeboxStream", () => {
 
     await migrateZonesToCurrentJukeboxStream(snapserver, onError);
 
-    expect(snapserver.setGroupStream).toHaveBeenCalledWith("group-1", "MusicAndAlerts");
-    expect(snapserver.setGroupStream).toHaveBeenCalledWith("group-2", "MusicAndAlerts");
+    expect(snapserver.setGroupStream).toHaveBeenCalledWith(
+      "group-1",
+      "MusicAndAlerts",
+    );
+    expect(snapserver.setGroupStream).toHaveBeenCalledWith(
+      "group-2",
+      "MusicAndAlerts",
+    );
     expect(onError).not.toHaveBeenCalled();
   });
 
-  it("leaves a group already on MusicAndAlerts, Alerts, Silence, or its own AirPlay stream alone", async () => {
+  it("leaves a group already on MusicAndAlerts, Alerts, Silence, or any other stream alone", async () => {
     const snapserver = fakeSnapserver([
       { id: "group-1", streamId: "MusicAndAlerts", clients: [] },
       { id: "group-2", streamId: "Alerts", clients: [] },
       { id: "group-3", streamId: "Silence", clients: [] },
-      { id: "group-4", streamId: "AirPlay - Salon", clients: [] },
+      { id: "group-4", streamId: "SomeOtherStream", clients: [] },
     ]);
 
     await migrateZonesToCurrentJukeboxStream(snapserver, vi.fn());
@@ -50,7 +56,9 @@ describe("migrateZonesToCurrentJukeboxStream", () => {
 
     await migrateZonesToCurrentJukeboxStream(snapserver, onError);
 
-    expect(onError).toHaveBeenCalledWith(expect.stringContaining("connection refused"));
+    expect(onError).toHaveBeenCalledWith(
+      expect.stringContaining("connection refused"),
+    );
   });
 });
 
@@ -67,9 +75,20 @@ describe("startZoneSync", () => {
   it("claims the next free n2kZone for a genuinely new zone, and fires the onZoneAssignmentClaimed callback", async () => {
     const store = new StateStore(createInitialState());
     const snapserver = fakeSnapserverWithGroups([
-      { id: "group-1", streamId: "MusicAndAlerts", clients: [
-        { id: "zone-a", name: "Salon", connected: true, volume: 50, muted: false, groupId: "group-1" },
-      ] },
+      {
+        id: "group-1",
+        streamId: "MusicAndAlerts",
+        clients: [
+          {
+            id: "zone-a",
+            name: "Salon",
+            connected: true,
+            volume: 50,
+            muted: false,
+            groupId: "group-1",
+          },
+        ],
+      },
     ]);
     const onClaimed = vi.fn();
 
@@ -87,9 +106,20 @@ describe("startZoneSync", () => {
     const store = new StateStore(createInitialState());
     store.restoreZoneAssignments({ "zone-a": { n2kZone: 2 } });
     const snapserver = fakeSnapserverWithGroups([
-      { id: "group-1", streamId: "MusicAndAlerts", clients: [
-        { id: "zone-a", name: "Salon", connected: true, volume: 50, muted: false, groupId: "group-1" },
-      ] },
+      {
+        id: "group-1",
+        streamId: "MusicAndAlerts",
+        clients: [
+          {
+            id: "zone-a",
+            name: "Salon",
+            connected: true,
+            volume: 50,
+            muted: false,
+            groupId: "group-1",
+          },
+        ],
+      },
     ]);
     const onClaimed = vi.fn();
 
@@ -105,10 +135,28 @@ describe("startZoneSync", () => {
   it("assigns increasing n2kZone numbers to distinct zones seen for the first time, in the order they're processed", async () => {
     const store = new StateStore(createInitialState());
     const snapserver = fakeSnapserverWithGroups([
-      { id: "group-1", streamId: "MusicAndAlerts", clients: [
-        { id: "zone-a", name: "Salon", connected: true, volume: 50, muted: false, groupId: "group-1" },
-        { id: "zone-b", name: "Cockpit", connected: true, volume: 50, muted: false, groupId: "group-1" },
-      ] },
+      {
+        id: "group-1",
+        streamId: "MusicAndAlerts",
+        clients: [
+          {
+            id: "zone-a",
+            name: "Salon",
+            connected: true,
+            volume: 50,
+            muted: false,
+            groupId: "group-1",
+          },
+          {
+            id: "zone-b",
+            name: "Cockpit",
+            connected: true,
+            volume: 50,
+            muted: false,
+            groupId: "group-1",
+          },
+        ],
+      },
     ]);
 
     const stop = startZoneSync(store, snapserver, 2000);
@@ -129,13 +177,52 @@ describe("startZoneSync", () => {
       "zone-4": { n2kZone: 3 },
     });
     const snapserver = fakeSnapserverWithGroups([
-      { id: "group-1", streamId: "MusicAndAlerts", clients: [
-        { id: "zone-1", name: "Z1", connected: true, volume: 50, muted: false, groupId: "group-1" },
-        { id: "zone-2", name: "Z2", connected: true, volume: 50, muted: false, groupId: "group-1" },
-        { id: "zone-3", name: "Z3", connected: true, volume: 50, muted: false, groupId: "group-1" },
-        { id: "zone-4", name: "Z4", connected: true, volume: 50, muted: false, groupId: "group-1" },
-        { id: "zone-5", name: "Z5", connected: true, volume: 50, muted: false, groupId: "group-1" },
-      ] },
+      {
+        id: "group-1",
+        streamId: "MusicAndAlerts",
+        clients: [
+          {
+            id: "zone-1",
+            name: "Z1",
+            connected: true,
+            volume: 50,
+            muted: false,
+            groupId: "group-1",
+          },
+          {
+            id: "zone-2",
+            name: "Z2",
+            connected: true,
+            volume: 50,
+            muted: false,
+            groupId: "group-1",
+          },
+          {
+            id: "zone-3",
+            name: "Z3",
+            connected: true,
+            volume: 50,
+            muted: false,
+            groupId: "group-1",
+          },
+          {
+            id: "zone-4",
+            name: "Z4",
+            connected: true,
+            volume: 50,
+            muted: false,
+            groupId: "group-1",
+          },
+          {
+            id: "zone-5",
+            name: "Z5",
+            connected: true,
+            volume: 50,
+            muted: false,
+            groupId: "group-1",
+          },
+        ],
+      },
     ]);
     const onClaimed = vi.fn();
 

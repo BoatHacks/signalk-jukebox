@@ -1,12 +1,7 @@
 // Minimal Snapserver JSON-RPC control client (ARCHITECTURE.md §2.2, §5).
 // Snapserver's control API is documented in the Snapcast repo at
 // doc/json_rpc_api/control.md (project moved from badaix/snapcast to
-// snapcast/snapcast). Confirmed via research (SPEC.md §13): Snapserver
-// >= 0.33.0 (pinned by this project's image, ARCHITECTURE.md §2.4) allows
-// Stream.AddStream/RemoveStream to create and cleanly remove
-// process/airplay-type streams via a `stream.sandbox_dir` executable-path
-// check -- the earlier v0.31.0-v0.32.x type whitelist that blocked this
-// no longer applies to the version this project requires.
+// snapcast/snapcast).
 //
 // This is a raw TCP socket client, not HTTP -- confirmed by build-testing
 // against a real Snapserver 0.35.0. An earlier draft of
@@ -21,9 +16,8 @@
 //
 // Each zone (Snapclient) keeps its own Snapcast-assigned group -- there is
 // no Group.Create/Delete RPC, and this plugin never needs one: switching
-// a zone between the Jukebox stream and its own AirPlay receiver is
-// `Group.SetStream` on that zone's *existing* group, not a client
-// reassignment between groups (SPEC.md §6.4).
+// a zone between streams is `Group.SetStream` on that zone's *existing*
+// group, not a client reassignment between groups.
 
 import { connect, type Socket } from "node:net";
 
@@ -223,27 +217,10 @@ export class SnapserverClient {
   }
 
   /** Point an existing group at a different stream (SPEC.md §6.4) --
-   * fully dynamic, no restart. This is how a zone switches between the
-   * Jukebox stream and its own AirPlay receiver; it does not move
-   * clients between groups or create either one. */
+   * fully dynamic, no restart. It does not move clients between groups
+   * or create either one. */
   setGroupStream(groupId: string, streamId: string): Promise<void> {
     return this.call("Group.SetStream", { id: groupId, stream_id: streamId });
-  }
-
-  /** Create a stream at runtime (SPEC.md §6.4, §13). Confirmed to work
-   * for `airplay://` URIs on Snapserver >= 0.33.0, given the target
-   * executable lives inside the server's configured `sandbox_dir`. */
-  addStream(streamUri: string): Promise<{ streamId: string }> {
-    return this.call<{ stream_id: string }>("Stream.AddStream", {
-      streamUri,
-    }).then((r) => ({ streamId: r.stream_id }));
-  }
-
-  /** Remove a stream at runtime -- confirmed (SPEC.md §13) to SIGINT the
-   * underlying process (shairport-sync, for an airplay stream) and its
-   * children, and to unassign (not error) any group still pointed at it. */
-  removeStream(streamId: string): Promise<void> {
-    return this.call("Stream.RemoveStream", { id: streamId });
   }
 
   /** Forgets a client (and its group, if it was the group's only member)

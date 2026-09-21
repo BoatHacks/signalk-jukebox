@@ -137,9 +137,9 @@ export const openApiDocument = {
       post: {
         tags: ["zones"],
         summary:
-          "Switch a zone between the Jukebox, Alerts, Silence, and AirPlay streams",
+          "Switch a zone between the Jukebox, Alerts, and Silence streams",
         description:
-          '"jukebox" (the shared music stream, auto-ducking for announcements and AirPlay) or "alerts" (a standing announcement-intake stream other containers can feed, so a zone can be taken off the jukebox without muting its Snapclient entirely) or "silence" (a zone that shouldn\'t hear anything at all, not even announcements, e.g. a sleeping cabin) or "airplay" (the single, statically-declared AirPlay input, SPEC.md §6.4 -- points this zone directly at it, same as alerts/silence).',
+          '"jukebox" (the shared music stream, auto-ducking for announcements) or "alerts" (a standing announcement-intake stream other containers can feed, so a zone can be taken off the jukebox without muting its Snapclient entirely) or "silence" (a zone that shouldn\'t hear anything at all, not even announcements, e.g. a sleeping cabin).',
         parameters: [{ $ref: "#/components/parameters/ZoneId" }],
         requestBody: {
           required: true,
@@ -151,7 +151,7 @@ export const openApiDocument = {
                 properties: {
                   source: {
                     type: "string",
-                    enum: ["jukebox", "alerts", "silence", "airplay"],
+                    enum: ["jukebox", "alerts", "silence"],
                   },
                 },
               },
@@ -356,26 +356,6 @@ export const openApiDocument = {
           muted: { type: "boolean" },
         },
       },
-      ZoneAirPlayInfo: {
-        type: "object",
-        required: ["streamName", "connected"],
-        properties: {
-          streamName: {
-            type: "string",
-            description:
-              "The mDNS name this zone's AirPlay receiver was created with.",
-          },
-          connected: { type: "boolean" },
-          track: {
-            type: "object",
-            properties: {
-              title: { type: "string" },
-              artist: { type: "string" },
-              album: { type: "string" },
-            },
-          },
-        },
-      },
       Zone: {
         type: "object",
         required: [
@@ -403,9 +383,8 @@ export const openApiDocument = {
           },
           activeSource: {
             type: "string",
-            enum: ["jukebox", "alerts", "silence", "airplay"],
+            enum: ["jukebox", "alerts", "silence"],
           },
-          airplay: { $ref: "#/components/schemas/ZoneAirPlayInfo" },
         },
       },
       VersionInfo: {

@@ -81,7 +81,9 @@ export function registerControlsMeta(
   app: ControlsMetaAppLike,
   pluginId: string,
 ): void {
-  const actions = Object.keys(PLAYBACK_CONTROL_PATHS) as PlaybackControlAction[];
+  const actions = Object.keys(
+    PLAYBACK_CONTROL_PATHS,
+  ) as PlaybackControlAction[];
   app.handleMessage(pluginId, {
     updates: [
       {
