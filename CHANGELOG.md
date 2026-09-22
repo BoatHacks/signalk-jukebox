@@ -6,6 +6,40 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-09-22
+
+### Fixed
+
+- A single mislabeled/muxed internet-radio stream crashing the whole
+  sk-jukebox container: confirmed live on halpi2, 2026-09-22, that
+  GStreamer's decodebin autoplugged an AV1 video parser (`gstav1parse`)
+  into what's meant to be a pure audio pipeline (Mopidy's `stream`
+  extension -> `snapfifo`), hitting a real gst-plugins-bad bug
+  (`gstav1parse.c:2075` asserts instead of erroring gracefully on a
+  byte-stream not aligned to AV1 temporal units) that aborted mopidy
+  (SIGABRT) and, via `entrypoint.sh`'s old `wait -n`-on-two-fixed-pids
+  design, took Snapserver and every zone down with it (MopidyOnly,
+  Alerts, Silence, MusicAndAlerts alike), even though only mopidy itself
+  was actually broken. Two changes:
+  - `image/Dockerfile` now sets `GST_PLUGIN_FEATURE_RANK=av1parse:NONE`,
+    blocking that element from ever being autoplugged -- this pipeline
+    has no legitimate use for AV1 (a video codec) at all, so this closes
+    off the whole class of "some radio stream is muxed/mislabeled and
+    drags a video parser into an audio-only pipeline" bug, not just this
+    one instance.
+  - `image/entrypoint.sh` now supervises mopidy in its own respawn-in-place
+    loop (`supervise_mopidy`), mirroring
+    signalk-jukebox-wyoming-bridge's own snapclient respawn pattern
+    (`nextRapidExitState`/`startSnapclient()`) -- a single mopidy crash no
+    longer takes Snapserver or any zone down with it. Only a genuinely
+    broken, immediately-crash-looping mopidy (5 rapid exits within 3s)
+    falls through to the old fatal whole-container-restart behavior, a
+    safety net for states no amount of respawning would fix.
+  - See ARCHITECTURE.md §2.4 for the full design writeup and
+    `test/entrypoint-mopidy-respawn.test.ts` for a regression test
+    (shells out to bash and sources the real `entrypoint.sh` so a
+    regression in the real script's behavior actually gets caught).
+
 ## [0.2.0] - 2026-09-21
 
 ### Added

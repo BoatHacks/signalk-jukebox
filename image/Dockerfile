@@ -102,6 +102,27 @@ RUN curl -fsSL -o /tmp/snapweb.deb \
     && apt-get update && apt-get install -y --no-install-recommends /tmp/snapweb.deb \
     && rm -f /tmp/snapweb.deb && rm -rf /var/lib/apt/lists/*
 
+# Blocklist gstav1parse from GStreamer's autoplugging (decodebin/playbin,
+# used internally by Mopidy's `stream`/`local`/`spotify` backends): confirmed
+# live on halpi2, 2026-09-22, that a mislabeled/muxed internet-radio stream
+# got decodebin to plug an AV1 video parser into what's meant to be a pure
+# audio pipeline (Mopidy -> snapfifo, mopidy.conf.template's [audio] output
+# never touches video at all), which then hit a real gst-plugins-bad bug --
+# gstav1parse.c:2075 asserts `self->in_align ==
+# GST_AV1_PARSE_ALIGN_TEMPORAL_UNIT` and aborts (SIGABRT) instead of
+# erroring gracefully when fed a byte-stream not aligned to AV1 temporal
+# units, e.g. a live/fragmented stream. That abort took down the whole
+# mopidy process (see entrypoint.sh's respawn handling below) and, before
+# this file's fix, the whole container's process group with it. This
+# pipeline has no legitimate use for AV1 (a video codec) at all, so ranking
+# the element out entirely -- GST_PLUGIN_FEATURE_RANK is a standard
+# GStreamer env var, `elementname:rank`, NONE meaning "never autoplug" --
+# is strictly better than trying to filter/catch the one stream that
+# triggered it: it closes off the whole class of "some radio stream is
+# muxed/mislabeled and drags a video parser into an audio-only pipeline"
+# bug, not just this one instance.
+ENV GST_PLUGIN_FEATURE_RANK=av1parse:NONE
+
 WORKDIR /app
 COPY entrypoint.sh /app/entrypoint.sh
 COPY mopidy.conf.template /app/mopidy.conf.template

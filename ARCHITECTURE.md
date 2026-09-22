@@ -337,6 +337,21 @@ fixed.
   Follows the precedent of signalk-wyoming's purpose-built
   `wyoming-satellite` image for the same "glue upstream processes
   together" reason.
+- Mopidy is supervised independently of Snapserver in `entrypoint.sh`, not
+  just backgrounded once: confirmed live on halpi2, 2026-09-22, that a
+  single mislabeled internet-radio stream aborted mopidy (a gstav1parse
+  assertion — GStreamer's decodebin autoplugging a video parser into what's
+  meant to be a pure audio pipeline, then hitting a real gst-plugins-bad
+  bug asserting instead of erroring), which took the whole container down
+  with it and silenced every zone, not just the one playing that stream.
+  `GST_PLUGIN_FEATURE_RANK=av1parse:NONE` (Dockerfile) blocks that specific
+  element from ever being autoplugged — this pipeline has no legitimate
+  use for AV1 at all — and `entrypoint.sh`'s `supervise_mopidy` respawns
+  mopidy in place on any crash (mirroring
+  signalk-jukebox-wyoming-bridge's own snapclient respawn pattern), only
+  falling through to the old fatal whole-container-restart behavior if
+  mopidy crash-loops rapidly and repeatedly, a genuinely broken state no
+  amount of respawning fixes.
 
 ### 2.5 Duck-trigger adapter
 
