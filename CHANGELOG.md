@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-09-22
+
+### Fixed
+
+- 0.2.1's `entrypoint.sh` used `date +%s%3N` for millisecond precision in
+  the new `supervise_mopidy` crash-loop check -- `%3N` is a GNU `date`
+  extension; BSD `date` (macOS) emits the literal `N` instead of
+  substituting it, breaking the arithmetic outright. Harmless in the
+  actual deployed container (Debian/GNU `date`), but broke `plugin-ci`'s
+  cross-platform runner matrix once the new regression test started
+  sourcing the real script there. Switched to whole-second precision,
+  still plenty to tell "crashed instantly" from "ran for a while"
+  against the 3-second threshold, and supported by both GNU and BSD
+  `date`.
+
 ## [0.2.1] - 2026-09-22
 
 ### Fixed
