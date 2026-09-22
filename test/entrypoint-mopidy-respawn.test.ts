@@ -46,10 +46,10 @@ describe("entrypoint.sh next_rapid_exit_state", () => {
     () => {
       const result = runBash(
         `source "${ENTRYPOINT_PATH}"
-       next_rapid_exit_state 100 0
-       next_rapid_exit_state 100 1
-       next_rapid_exit_state 5000 2
-       next_rapid_exit_state 50 4`,
+       next_rapid_exit_state 0 0
+       next_rapid_exit_state 1 1
+       next_rapid_exit_state 5 2
+       next_rapid_exit_state 0 4`,
         "/usr/bin",
       );
       expect(result.status).toBe(0);

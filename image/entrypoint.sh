@@ -20,16 +20,23 @@ set -e
 # `next_rapid_exit_state` is a pure function specifically so it can be
 # sourced and unit-tested without actually running mopidy (see
 # test/entrypoint-mopidy-respawn.test.ts).
-RAPID_EXIT_THRESHOLD_MS=3000
+# Whole seconds, not bridge.mjs's milliseconds: `date +%s%3N` (the obvious
+# ms-precision equivalent) is a GNU date extension -- BSD date (macOS,
+# where plugin-ci's cross-platform test matrix also runs this repo's own
+# `npm test`, unlike the container image itself which is always Debian) just
+# emits the literal "N" instead of substituting it, breaking the arithmetic
+# below outright. Second precision is still plenty to tell "crashed
+# instantly" from "ran for a while" against a 3-second threshold.
+RAPID_EXIT_THRESHOLD_S=3
 MAX_CONSECUTIVE_RAPID_EXITS=5
 
-# Prints "<new count> <give_up:0|1>" for the given run duration (ms) and
-# previous consecutive-rapid-exit count. A run lasting at least
-# RAPID_EXIT_THRESHOLD_MS resets the count to 0, same as
+# Prints "<new count> <give_up:0|1>" for the given run duration (whole
+# seconds) and previous consecutive-rapid-exit count. A run lasting at
+# least RAPID_EXIT_THRESHOLD_S resets the count to 0, same as
 # nextRapidExitState's `ranMs < RAPID_EXIT_THRESHOLD_MS` check.
 next_rapid_exit_state() {
-  local ran_ms="$1" previous_count="$2" count give_up
-  if [ "$ran_ms" -lt "$RAPID_EXIT_THRESHOLD_MS" ]; then
+  local ran_s="$1" previous_count="$2" count give_up
+  if [ "$ran_s" -lt "$RAPID_EXIT_THRESHOLD_S" ]; then
     count=$((previous_count + 1))
   else
     count=0
@@ -70,9 +77,9 @@ MOPIDY_PID_FILE="${MOPIDY_PID_FILE:-/tmp/mopidy.pid}"
 MOPIDY_SHUTDOWN_FLAG="${MOPIDY_SHUTDOWN_FLAG:-/tmp/mopidy.shutting-down}"
 
 supervise_mopidy() {
-  local rapid_exit_count=0 started_at ran_ms status count give_up pid
+  local rapid_exit_count=0 started_at ran_s status count give_up pid
   while true; do
-    started_at=$(date +%s%3N)
+    started_at=$(date +%s)
     mopidy --config /data/mopidy.conf &
     pid=$!
     echo "$pid" > "$MOPIDY_PID_FILE"
@@ -87,14 +94,14 @@ supervise_mopidy() {
     if [ -e "$MOPIDY_SHUTDOWN_FLAG" ]; then
       return 0
     fi
-    ran_ms=$(( $(date +%s%3N) - started_at ))
-    read -r count give_up < <(next_rapid_exit_state "$ran_ms" "$rapid_exit_count")
+    ran_s=$(( $(date +%s) - started_at ))
+    read -r count give_up < <(next_rapid_exit_state "$ran_s" "$rapid_exit_count")
     rapid_exit_count="$count"
     if [ "$give_up" = "1" ]; then
-      echo "mopidy exited ($status) $count times in a row within ${RAPID_EXIT_THRESHOLD_MS}ms of starting; giving up and exiting to restart the whole container" >&2
+      echo "mopidy exited ($status) $count times in a row within ${RAPID_EXIT_THRESHOLD_S}s of starting; giving up and exiting to restart the whole container" >&2
       return "$status"
     fi
-    echo "mopidy exited ($status) after ${ran_ms}ms; respawning in place" >&2
+    echo "mopidy exited ($status) after ${ran_s}s; respawning in place" >&2
   done
 }
 
